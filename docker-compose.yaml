@@ -1,0 +1,133 @@
+services:
+  # --- DATABASE LAYER ---
+  mongo:
+    image: mongo:6.0
+    container_name: media_mongo
+    restart: always
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - media_network
+
+  # --- QUEUE LAYER ---
+  redis:
+    image: redis:alpine
+    container_name: media_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - media_network
+
+  # --- APPLICATION LAYER ---
+  api:
+    build:
+      context: .
+      dockerfile: ./apps/api/Dockerfile
+    container_name: media_api
+    restart: always
+    ports:
+      - "4001:4000"
+    environment:
+      - DATABASE_URL=mongodb://mongo:27017/mediadb
+      - REDIS_URL=redis://redis:6379
+      - MINIO_ENDPOINT=minio
+      - MINIO_ENDPOINT_EXTERNAL=http://localhost:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - media_network
+    develop:
+      watch:
+        - path: ./apps/api/src
+          action: rebuild
+        - path: ./packages/database
+          action: rebuild
+        - path: ./apps/api/package.json
+          action: rebuild
+        - path: ./pnpm-lock.yaml
+          action: rebuild
+  # --- OBJECT STORAGE ---
+  minio:
+    image: minio/minio:latest
+    container_name: media_minio
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+    command: server --console-address ":9001" /data
+    volumes:
+      - ./data/minio:/data
+    networks:
+      - media_network
+
+  # --- WORKER ---
+  worker:
+    build:
+      context: .
+      dockerfile: ./apps/worker/Dockerfile
+    container_name: media_worker
+    restart: always
+    environment:
+      - DATABASE_URL=mongodb://mongo:27017/mediadb
+      - REDIS_URL=redis://redis:6379
+      - MINIO_ENDPOINT=minio
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password
+    depends_on:
+      - mongo
+      - redis
+      - minio
+    networks:
+      - media_network
+    develop:
+      watch:
+        - path: ./apps/worker/src
+          action: rebuild
+        - path: ./packages/database
+          action: rebuild
+        - path: ./apps/worker/package.json
+          action: rebuild
+        - path: ./pnpm-lock.yaml
+          action: rebuild
+
+  # --- FRONTEND ---
+  client:
+    build:
+      context: .
+      dockerfile: ./apps/client/Dockerfile
+    container_name: media_client
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      - VITE_API_URL=http://localhost:4001
+    depends_on:
+      - api
+    networks:
+      - media_network
+    develop:
+      watch:
+        - path: ./apps/client/src
+          action: rebuild
+        - path: ./apps/client/dist
+          action: rebuild
+        - path: ./apps/client/package.json
+          action: rebuild
+        - path: ./pnpm-lock.yaml
+          action: rebuild
+
+networks:
+  media_network:
+    driver: bridge
+
+volumes:
+  mongo_data:

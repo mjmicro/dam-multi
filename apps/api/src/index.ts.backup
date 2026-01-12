@@ -1,0 +1,358 @@
+// import express, { Application, Request, Response } from 'express';
+// import { Queue } from 'bullmq';
+// import IORedis from 'ioredis';
+// import * as Minio from 'minio';
+// import dotenv from 'dotenv';
+// // import { Asset } from '@dam/database';
+// dotenv.config();
+
+// const app: Application = express();
+// const PORT = process.env.PORT || 4000;
+
+// // 1. Initialize Database & Redis
+// import mongoose from 'mongoose';
+
+// // Simple Mongoose connectivity (no shim). Connect early and define models here.
+// const mongoUrl = process.env.DATABASE_URL || process.env.MONGO_URL || 'mongodb://mongo:27017/mediadb';
+
+// let Asset: any = null;
+
+// async function initDb() {
+//   try {
+//     await mongoose.connect(mongoUrl, { autoIndex: false });
+//     const { Schema } = mongoose as any;
+//     const AssetSchema = new Schema({
+//       filename: String,
+//       originalName: String,
+//       mimeType: String,
+//       size: Number,
+//       providerPath: String,
+//       status: String,
+//       createdAt: { type: Date, default: Date.now },
+//     }, { collection: 'assets' });
+
+//     Asset = mongoose.models.Asset || mongoose.model('Asset', AssetSchema);
+//     console.log('Mongoose connected to', mongoUrl);
+//   } catch (err: any) {
+//     console.warn('DB initialization skipped at startup:', err?.stack || err?.message || err);
+//   }
+// }
+
+// // initialize DB but don't block startup fully
+// initDb();
+// const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
+//   maxRetriesPerRequest: null, // Required by BullMQ
+// });
+
+// // 2. Initialize MinIO Client
+// const minioClient = new Minio.Client({
+//   endPoint: process.env.MINIO_ENDPOINT || 'localhost',
+//   port: 9000,
+//   useSSL: false,
+//   accessKey: process.env.MINIO_ACCESS_KEY || 'admin',
+//   secretKey: process.env.MINIO_SECRET_KEY || 'password',
+// });
+
+// // 3. Initialize BullMQ Queue
+// const assetQueue = new Queue('asset-tasks', { 
+//   connection: redisConnection,
+//   defaultJobOptions: {
+//     attempts: 3,
+//     backoff: { type: 'exponential', delay: 1000 },
+//     removeOnComplete: true,
+//   }
+// });
+
+// // --- Middleware ---
+// // app.use(helmet()); // Security headers
+// // app.use(cors());
+// // app.use(morgan('dev')); // Logging
+// app.use(express.json());
+
+// // // --- Routes ---
+
+// // /**
+// //  * @route   GET /api/upload/presigned-url
+// //  * @desc    Generate a secure URL for direct upload to MinIO
+// //  */
+// // app.get('/api/upload/presigned-url', async (req: Request, res: Response) => {
+// //   try {
+// //     const fileName = req.query.name as string;
+// //     const objectName = `uploads/${Date.now()}-${fileName}`;
+    
+// //     // Direct upload link valid for 15 minutes
+// //     const url = await minioClient.presignedPutObject('assets', objectName, 15 * 60);
+    
+// //     res.json({ url, objectName });
+// //   } catch (err) {
+// //     res.status(500).json({ error: 'Failed to generate upload URL' });
+// //   }
+// // });
+
+// // /**
+// //  * @route   POST /api/assets
+// //  * @desc    Record asset in DB and trigger processing queue
+// //  */
+// // app.post('/api/assets', async (req: Request, res: Response) => {
+// //   const { originalName, objectName, mimeType, size } = req.body;
+
+// //   try {
+// //     // 1. Create PENDING record in MongoDB using the runtime DB client
+// //     // (example using `dbClient` backed by Mongoose)
+// //     const asset = await Asset.create({
+// //       data: {
+// //         filename: objectName,
+// //         originalName,
+// //         mimeType,
+// //         size: parseInt(size),
+// //         providerPath: objectName,
+// //         status: 'PENDING',
+// //       },
+// //     });
+
+// //     // 2. Add to BullMQ for Worker to pick up
+// //     await assetQueue.add('process-media', {
+// //       assetId: asset._id || asset.id,
+// //       objectName,
+// //       mimeType,
+// //     });
+
+// //     res.status(201).json(asset);
+// //   } catch (err) {
+// //     res.status(500).json({ error: 'Failed to initiate asset processing' });
+// //   }
+// // });
+
+// // /**
+// //  * @route   GET /api/assets
+// //  * @desc    List assets with basic filters (Search/Type)
+// //  */
+// app.get('/api/assets', async (req: Request, res: Response) => {
+//   const { type, search } = req.query;
+
+//   const assets = Asset ? await Asset.find({}).lean().exec() : [];
+
+//   res.json(assets);
+// });
+
+// // Minimal POST route to create an asset (used for smoke tests)
+// app.post('/api/assets', async (req: Request, res: Response) => {
+//   try {
+//     const { originalName, objectName, mimeType, size } = req.body;
+//     if (!objectName || !originalName) {
+//       return res.status(400).json({ error: 'objectName and originalName required' });
+//     }
+
+//     const assetData = {
+//       filename: objectName,
+//       originalName,
+//       mimeType: mimeType || 'application/octet-stream',
+//       size: size ? parseInt(String(size)) : 0,
+//       providerPath: objectName,
+//       status: 'PENDING',
+//     };
+//     const asset = Asset ? await Asset.create(assetData) : assetData;
+
+//         // 2. Add to BullMQ for Worker to pick up
+//     await assetQueue.add('process-media', {
+//       assetId: asset._id || asset.id,
+//       objectName,
+//       mimeType,
+//     });
+//     return res.status(201).json(asset);
+//   } catch (err) {
+//     return res.status(500).json({ error: 'Failed to create asset', details: String(err) });
+//   }
+// });
+
+// // --- Server Start ---
+
+// app.listen(PORT, () => {
+//   console.log(`🚀 API Server running on http://localhost:${PORT}`);
+// });
+
+
+import express from 'express';
+import mongoose, { Schema } from 'mongoose';
+import * as Minio from 'minio';
+import { Queue } from 'bullmq';
+import IORedis from 'ioredis';
+
+const app = express();
+app.use(express.json());
+
+const mongoUrl = process.env.DATABASE_URL || 'mongodb://mongo:27017/mediadb';
+
+// Define Asset model
+const AssetSchema = new Schema({
+  filename: String,
+  originalName: String,
+  mimeType: String,
+  size: Number,
+  providerPath: String,
+  status: String,
+  createdAt: { type: Date, default: Date.now },
+}, { collection: 'assets' });
+
+let Asset: any = null;
+
+// Initialize Mongoose
+mongoose.connect(mongoUrl, { autoIndex: false }).then(() => {
+  Asset = mongoose.models.Asset || mongoose.model('Asset', AssetSchema);
+  console.log('✅ MongoDB connected');
+}).catch(err => {
+  console.error('❌ MongoDB connection failed:', err.message);
+});
+
+// 1. Infrastructure Connections
+const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', { maxRetriesPerRequest: null });
+const assetQueue = new Queue('asset-tasks', { connection: redisConnection });
+
+const minioClient = new Minio.Client({
+  endPoint: process.env.MINIO_ENDPOINT || 'minio',
+  port: 9000,
+  useSSL: false,
+  accessKey: process.env.MINIO_ACCESS_KEY || 'admin',
+  secretKey: process.env.MINIO_SECRET_KEY || 'password',
+});
+
+const minioExternalUrl = process.env.MINIO_ENDPOINT_EXTERNAL || 'http://localhost:9000';
+
+// Initialize MinIO bucket
+(async () => {
+  try {
+    const bucketExists = await minioClient.bucketExists('assets');
+    if (!bucketExists) {
+      await minioClient.makeBucket('assets', 'us-east-1');
+      console.log('✅ MinIO bucket "assets" created');
+    } else {
+      console.log('✅ MinIO bucket "assets" exists');
+    }
+  } catch (err: any) {
+    console.error('⚠️  MinIO bucket check/create failed:', err.message);
+  }
+})();
+
+// 2. Route: Get Presigned URL for direct upload
+app.get('/api/upload-url', async (req, res) => {
+  const { fileName } = req.query;
+  const objectName = `uploads/${Date.now()}-${fileName}`;
+  
+  try {
+    const url = await minioClient.presignedPutObject('assets', objectName, 60 * 5); // 5 min expiry
+    // Replace internal endpoint with external for clients
+    const externalUrl = url.replace(`http://${process.env.MINIO_ENDPOINT || 'minio'}:9000`, minioExternalUrl);
+    res.json({ url: externalUrl, objectName });
+  } catch (err: any) {
+    console.error('❌ Presigned URL generation failed:', err.message);
+    res.status(500).json({ error: 'Failed to generate URL', details: err.message });
+  }
+});
+
+// 3. Route: Direct file upload (uploads file to MinIO and creates asset record)
+app.post('/api/upload', async (req, res) => {
+  const { originalName, mimeType, data } = req.body;
+  
+  if (!originalName || !data) {
+    return res.status(400).json({ error: 'originalName and data (base64) required' });
+  }
+
+  try {
+    if (!Asset) {
+      return res.status(503).json({ error: 'Database not initialized' });
+    }
+
+    const objectName = `uploads/${Date.now()}-${originalName}`;
+    
+    // Convert base64 to buffer
+    const buffer = Buffer.from(data, 'base64');
+    
+    // Upload file to MinIO
+    await minioClient.putObject('assets', objectName, buffer, buffer.length, {
+      'Content-Type': mimeType || 'application/octet-stream',
+    });
+    
+    console.log(`✅ File uploaded to MinIO: ${objectName} (${buffer.length} bytes)`);
+
+    // Create asset record
+    const asset = await Asset.create({
+      filename: objectName,
+      originalName,
+      mimeType: mimeType || 'application/octet-stream',
+      size: buffer.length,
+      status: 'PENDING',
+      providerPath: `assets/${objectName}`
+    });
+
+    // Queue processing job
+    await assetQueue.add('process-media', {
+      assetId: asset._id,
+      objectName,
+      mimeType
+    });
+
+    res.status(201).json({ 
+      message: 'File uploaded and processing started',
+      assetId: asset._id,
+      objectName
+    });
+  } catch (err: any) {
+    console.error('❌ Upload failed:', err.message);
+    res.status(500).json({ error: 'Upload failed', details: err.message });
+  }
+});
+
+// 3. Route: Finalize Upload & Queue Job
+app.post('/api/finalize', async (req, res) => {
+  const { objectName, originalName, mimeType, size } = req.body;
+
+  try {
+    if (!Asset) {
+      return res.status(503).json({ error: 'Database not initialized' });
+    }
+    // Create PENDING record in MongoDB
+    const asset = await Asset.create({
+      filename: objectName,
+      originalName,
+      mimeType,
+      size,
+      status: 'PENDING',
+      providerPath: `assets/${objectName}`
+    });
+
+    // Add to BullMQ for the worker to find
+    await assetQueue.add('process-media', {
+      assetId: asset._id,
+      objectName,
+      mimeType
+    });
+
+    res.status(202).json({ message: 'Processing started', assetId: asset._id });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Database or Queue error', details: err.message });
+  }
+});
+
+// 4. Route: Get all assets
+app.get('/api/assets', async (req, res) => {
+  try {
+    if (!Asset) {
+      return res.json([]);
+    }
+    const assets = await Asset.find({}).lean();
+    res.json(assets);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Query failed', details: err.message });
+  }
+});
+
+// 5. Route: Health check
+app.get('/health', async (req, res) => {
+  const dbOk = mongoose.connection.readyState === 1;
+  res.json({ ok: true, db: dbOk });
+});
+
+const PORT = 4000;
+app.listen(PORT, () => {
+  console.log(`🚀 API ready at http://localhost:${PORT}`);
+});

@@ -1,0 +1,147 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║               pnpm run dev - COMPLETE SOLUTION VISUALIZATION                 ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ COMMAND: pnpm run dev                                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │ Step 1: pnpm install                                              │    │
+│  │ Install all workspace dependencies                                 │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+│              │                                                               │
+│              ▼                                                               │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │ Step 2: pnpm --filter '@dam/database' build                       │    │
+│  │ Build shared database package (required by API & Worker)          │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+│              │                                                               │
+│              ▼                                                               │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │ Step 3: concurrently - Run 3 apps in parallel                     │    │
+│  │                                                                    │    │
+│  │  ┌──────────────────────────────────────────────────────────┐    │    │
+│  │  │ App 1: API Server                                        │    │    │
+│  │  │ ├─ Port: 4000                                            │    │    │
+│  │  │ ├─ Framework: Express.js                                 │    │    │
+│  │  │ ├─ Language: TypeScript                                  │    │    │
+│  │  │ ├─ Command: nodemon --watch src --exec "ts-node"        │    │    │
+│  │  │ └─ Hot Reload: ✅ Yes                                    │    │    │
+│  │  └──────────────────────────────────────────────────────────┘    │    │
+│  │                       ├──────────────────────────┤                │    │
+│  │                       ▼                          ▼                │    │
+│  │  ┌──────────────────────────────┐  ┌──────────────────────────┐ │    │
+│  │  │ App 2: Client                │  │ App 3: Worker            │ │    │
+│  │  │ ├─ Port: 5173               │  │ ├─ Type: BullMQ          │ │    │
+│  │  │ ├─ Framework: React + Vite  │  │ ├─ Language: TypeScript  │ │    │
+│  │  │ ├─ Language: TypeScript      │  │ ├─ Command: nodemon     │ │    │
+│  │  │ ├─ Command: vite            │  │ ├─ Hot Reload: ✅ Yes   │ │    │
+│  │  │ └─ HMR: ✅ Instant          │  │ └─ Function: Background  │ │    │
+│  │  └──────────────────────────────┘  └──────────────────────────┘ │    │
+│  │                                                                    │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ REQUIRED DOCKER SERVICES                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  docker compose up -d mongo redis minio                                     │
+│                                                                              │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
+│  │ MongoDB         │  │ Redis           │  │ MinIO           │             │
+│  │ localhost:27018 │  │ localhost:6379  │  │ localhost:9000  │             │
+│  │ Connection: ✅  │  │ Connection: ✅  │  │ Console: :9001  │             │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘             │
+│         │                    │                      │                       │
+│         │ Database           │ Job Queue            │ File Storage         │
+│         └────────────────────┴──────────────────────┘                      │
+│                          │                                                   │
+│                          ▼                                                   │
+│         ┌────────────────────────────────────────┐                         │
+│         │  Shared by API, Client & Worker       │                         │
+│         └────────────────────────────────────────┘                         │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ FILE STRUCTURE & CHANGES                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  apps/                                                                      │
+│  │                                                                          │
+│  ├── api/                                                                   │
+│  │   ├── package.json          [FIXED] ✅                                  │
+│  │   ├── tsconfig.json                                                     │
+│  │   └── .env                  [CREATED] ✅                                │
+│  │                                                                          │
+│  ├── client/                                                                │
+│  │   ├── package.json          [NO CHANGE]                                 │
+│  │   ├── tsconfig.json                                                     │
+│  │   └── .env                  [CREATED] ✅                                │
+│  │                                                                          │
+│  └── worker/                                                                │
+│      ├── package.json          [FIXED] ✅                                  │
+│      ├── tsconfig.json         [FIXED] ✅                                  │
+│      └── .env                  [CREATED] ✅                                │
+│                                                                              │
+│  packages/                                                                  │
+│  │                                                                          │
+│  └── database/                                                              │
+│      ├── package.json          [NO CHANGE]                                 │
+│      └── tsconfig.json         [NO CHANGE]                                 │
+│                                                                              │
+│  package.json                  [FIXED] ✅                                  │
+│  pnpm-workspace.yaml           [NO CHANGE]                                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ QUICK REFERENCE COMMANDS                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  # Start all required services                                             │
+│  docker compose up -d mongo redis minio                                    │
+│                                                                              │
+│  # Run all apps in parallel                                                │
+│  pnpm run dev                                                              │
+│                                                                              │
+│  # Run individual apps                                                     │
+│  pnpm run dev:api       # API only                                         │
+│  pnpm run dev:client    # Client only                                      │
+│  pnpm run dev:worker    # Worker only                                      │
+│                                                                              │
+│  # Access applications                                                      │
+│  Client:        http://localhost:5173                                      │
+│  API:           http://localhost:4000                                      │
+│  API Health:    http://localhost:4000/health                               │
+│  MinIO Console: http://localhost:9001 (admin/password)                     │
+│                                                                              │
+│  # Other commands                                                           │
+│  pnpm run build              # Build all apps                              │
+│  pnpm run lint               # Lint all apps                               │
+│  pnpm run docker:stop        # Stop Docker services                        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ KEY DEPENDENCIES INSTALLED                                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ✓ concurrently@8.2.2   - Run multiple dev servers in parallel             │
+│  ✓ ts-node@10.9.2       - Execute TypeScript without compilation          │
+│  ✓ nodemon@3.1.11       - Watch and restart on file changes               │
+│  ✓ typescript@5.9.3     - TypeScript compiler                             │
+│  ✓ express@4.18.2       - API framework                                   │
+│  ✓ react@18.2.0         - UI framework                                    │
+│  ✓ vite@5.0.8           - Frontend build tool                             │
+│  ✓ bullmq@5.0.0         - Job queue                                       │
+│  ✓ mongoose@7.3.0       - MongoDB ODM                                     │
+│  ✓ ioredis@5.3.2        - Redis client                                    │
+│  ✓ minio@7.1.3          - S3-compatible storage client                    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+SUMMARY: All issues fixed! The pnpm run dev command now works perfectly! ✅

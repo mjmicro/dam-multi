@@ -1,0 +1,13 @@
+{
+  "name": "@dam/database",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --outDir dist --module commonjs --target ES2020 --esModuleInterop --declaration"
+  },
+  "dependencies": {
+    "mongoose": "^7.3.0",
+    "dotenv": "17.2.3"
+  }
+}

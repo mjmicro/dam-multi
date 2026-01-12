@@ -1,0 +1,29 @@
+# version: '3.8'
+# services:
+#   api:
+#     image: my-app-api:latest
+#     deploy:
+#       replicas: 2
+#     environment:
+#       - DATABASE_URL=postgresql://...
+#       - REDIS_URL=redis://redis:6379
+
+#   worker:
+#     image: my-app-worker:latest
+#     deploy:
+#       replicas: 5  # Scale this based on CPU load
+#       resources:
+#         limits:
+#           cpus: '1.0'
+#           memory: 2G
+#     depends_on:
+#       - redis
+
+#   redis:
+#     image: redis:alpine
+#     volumes:
+#       - redis_data:/data
+
+#   minio:
+#     image: minio/minio
+#     command: server /data --console-address ":9001"

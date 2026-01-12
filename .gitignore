@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+*.pnpm
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+out/
+.next/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+.env.test.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+junit.xml
+*.lcov
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker
+.dockerignore
+docker-compose.override.yaml
+
+# Runtime data
+data/mongo/*
+data/minio/*
+!data/mongo/.gitkeep
+!data/minio/.gitkeep
+
+# Package manager
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Turbo
+.turbo/
+
+# pnpm
+.pnpm-debug.log
