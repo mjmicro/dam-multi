@@ -6,12 +6,13 @@ import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import {
   getAssetModel,
-  CreateAssetDTO,
-  AssetStatus,
-  connectDB as connectDatabase,
 } from '@dam/database';
-import { AssetService } from './services/AssetService';
+import { AssetService } from './services/asset-service';
+import { AssetRepository } from './repositories/asset-repository';
+import { UploadService } from './services/upload-service';
 import { getConfig } from './config/config';
+import assetRouter from './routes/asset-routes';
+import uploadRouter from './routes/upload-routes';
 
 const app = express();
 
@@ -34,6 +35,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Module-level state
 let assetService: AssetService | null = null;
+let assetRepository: AssetRepository | null = null;
+let uploadService: UploadService | null = null;
 let minioClient: Minio.Client | null = null;
 
 /**
@@ -85,8 +88,13 @@ async function initializeServices(): Promise<void> {
     // Get Asset model
     const AssetModel = getAssetModel(mongoose);
 
+    // Initialize Repository
+    assetRepository = new AssetRepository(AssetModel);
+    console.log('✅ AssetRepository initialized');
+
     // Initialize MinIO client
     minioClient = initializeMinIO(config);
+    app.locals.minioClient = minioClient;
     await setupMinioBucket(
       minioClient,
       config.minio.bucketName,
@@ -101,9 +109,16 @@ async function initializeServices(): Promise<void> {
       connection: redisConnection,
     });
 
-    // Initialize service after everything is ready
-    assetService = new AssetService(AssetModel, minioClient, assetQueue);
-    console.log('✅ AssetService initialized');
+    // Initialize service with repository (dependency injection)
+    assetService = new AssetService(assetRepository, minioClient, assetQueue);
+    app.locals.assetService = assetService;
+
+    // Initialize upload service with asset service dependency
+    uploadService = new UploadService(minioClient, assetService, config.minio.bucketName);
+    app.locals.uploadService = uploadService;
+
+    console.log('✅ AssetService initialized with Repository pattern');
+    console.log('✅ UploadService initialized for file uploads');
   } catch (err: any) {
     console.error('❌ Initialization failed:', err.message);
     process.exit(1);
@@ -147,248 +162,10 @@ app.get('/health', async (req: Request, res: Response) => {
 });
 
 /**
- * Get all assets with optional filters
+ * API Endpoints - Clean routing structure
  */
-app.get('/api/assets', async (req: Request, res: Response) => {
-  try {
-    if (!assetService) {
-      return res.status(503).json({ error: 'Service not initialized' });
-    }
-
-    const { status, mimeType } = req.query;
-    const assets = await assetService.getAllAssets({
-      status: status as AssetStatus | undefined,
-      mimeType: mimeType as string | undefined,
-    });
-
-    res.json(assets);
-  } catch (err: any) {
-    res
-      .status(500)
-      .json({ error: 'Failed to fetch assets', details: err.message });
-  }
-});
-
-/**
- * Get single asset by ID
- */
-app.get('/api/assets/:id', async (req: Request, res: Response) => {
-  try {
-    if (!assetService) {
-      return res.status(503).json({ error: 'Service not initialized' });
-    }
-
-    const asset = await assetService.getAssetById(req.params.id);
-    if (!asset) {
-      return res.status(404).json({ error: 'Asset not found' });
-    }
-
-    res.json(asset);
-  } catch (err: any) {
-    res
-      .status(500)
-      .json({ error: 'Failed to fetch asset', details: err.message });
-  }
-});
-
-/**
- * Upload file directly with base64 data
- */
-app.post('/api/upload', async (req: Request, res: Response) => {
-  const { originalName, mimeType, data } = req.body;
-
-  if (!originalName || !data) {
-    return res
-      .status(400)
-      .json({ error: 'originalName and data (base64) required' });
-  }
-
-  try {
-    if (!assetService) {
-      return res.status(503).json({ error: 'Service not initialized' });
-    }
-
-    const objectName = `uploads/${Date.now()}-${originalName}`;
-    const buffer = Buffer.from(data, 'base64');
-
-    // Upload file to MinIO using service
-    await assetService.uploadToMinIO('assets', objectName, buffer, {
-      'Content-Type': mimeType || 'application/octet-stream',
-    });
-
-    console.log(
-      `✅ File uploaded to MinIO: ${objectName} (${buffer.length} bytes)`
-    );
-
-    // Create asset record using service
-    const assetData: CreateAssetDTO = {
-      filename: objectName,
-      originalName,
-      mimeType: mimeType || 'application/octet-stream',
-      size: buffer.length,
-      providerPath: objectName,
-    };
-
-    const asset = await assetService.createAsset(assetData);
-
-    // Queue processing job using service
-    const jobId = await assetService.queueAssetForProcessing(
-      (asset._id as string).toString(),
-      originalName,
-      mimeType || 'application/octet-stream',
-      objectName
-    );
-
-    res.status(201).json({
-      message: 'File uploaded and processing started',
-      assetId: asset._id,
-      objectName,
-      jobId,
-    });
-  } catch (err: any) {
-    console.error('❌ Upload failed:', err.message);
-    res.status(500).json({ error: 'Upload failed', details: err.message });
-  }
-});
-
-/**
- * Get presigned upload URL from MinIO
- */
-app.get('/api/upload-url', async (req: Request, res: Response) => {
-  const { fileName } = req.query;
-  const config = getConfig();
-
-  if (!fileName) {
-    return res.status(400).json({ error: 'fileName query parameter required' });
-  }
-
-  const objectName = `uploads/${Date.now()}-${fileName}`;
-
-  try {
-    if (!minioClient) {
-      return res.status(503).json({ error: 'MinIO client not initialized' });
-    }
-
-    const url = await minioClient.presignedPutObject(
-      config.minio.bucketName,
-      objectName,
-      60 * 5 // 5 minutes
-    );
-    const externalUrl = url.replace(
-      `http://${config.minio.endpoint}:${config.minio.port}`,
-      config.minio.externalUrl
-    );
-
-    res.json({ url: externalUrl, objectName });
-  } catch (err: any) {
-    console.error('❌ Presigned URL generation failed:', err.message);
-    res.status(500).json({
-      error: 'Failed to generate URL',
-      details: err.message,
-    });
-  }
-});
-
-/**
- * Finalize upload after presigned upload
- */
-app.post('/api/finalize', async (req: Request, res: Response) => {
-  const { objectName, originalName, mimeType, size } = req.body;
-
-  if (!objectName || !originalName || !mimeType || !size) {
-    return res.status(400).json({
-      error: 'objectName, originalName, mimeType, and size are required',
-    });
-  }
-
-  try {
-    if (!assetService) {
-      return res.status(503).json({ error: 'Service not initialized' });
-    }
-
-    const assetData: CreateAssetDTO = {
-      filename: objectName,
-      originalName,
-      mimeType,
-      size,
-      providerPath: objectName,
-    };
-
-    const asset = await assetService.createAsset(assetData);
-    const jobId = await assetService.queueAssetForProcessing(
-      (asset._id as string).toString(),
-      originalName,
-      mimeType,
-      objectName
-    );
-
-    res.status(202).json({
-      message: 'Processing started',
-      assetId: asset._id,
-      jobId,
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      error: 'Database or Queue error',
-      details: err.message,
-    });
-  }
-});
-
-/**
- * Delete asset by ID
- */
-app.delete('/api/assets/:id', async (req: Request, res: Response) => {
-  try {
-    if (!assetService) {
-      return res.status(503).json({ error: 'Service not initialized' });
-    }
-
-    const asset = await assetService.getAssetById(req.params.id);
-    if (!asset) {
-      return res.status(404).json({ error: 'Asset not found' });
-    }
-
-    const success = await assetService.deleteAsset(req.params.id, asset.filename);
-
-    if (success) {
-      res.json({ message: 'Asset deleted successfully' });
-    } else {
-      res.status(500).json({ error: 'Failed to delete asset' });
-    }
-  } catch (err: any) {
-    res.status(500).json({ error: 'Delete failed', details: err.message });
-  }
-});
-
-/**
- * Get asset statistics
- */
-app.get('/api/stats', async (req: Request, res: Response) => {
-  try {
-    if (!assetService) {
-      return res.status(503).json({ error: 'Service not initialized' });
-    }
-
-    const total = await assetService.countAssets();
-    const pending = await assetService.getAssetsByStatus(AssetStatus.PENDING);
-    const processed = await assetService.getAssetsByStatus(
-      AssetStatus.PROCESSED
-    );
-    const failed = await assetService.getAssetsByStatus(AssetStatus.FAILED);
-
-    res.json({
-      total,
-      pending: pending.length,
-      processed: processed.length,
-      failed: failed.length,
-    });
-  } catch (err: any) {
-    res
-      .status(500)
-      .json({ error: 'Failed to fetch stats', details: err.message });
-  }
-});
+app.use('/api/assets', assetRouter);
+app.use('/api/upload', uploadRouter);
 
 // Start the application
 startApplication().catch((err) => {

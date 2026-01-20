@@ -1,3 +1,0 @@
-packages:
-  - 'apps/*'        # API, Worker, Client
-  - 'packages/*'    # Shared database, common types/utils

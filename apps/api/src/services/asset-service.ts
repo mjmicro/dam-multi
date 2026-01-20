@@ -1,44 +1,35 @@
-import { Model } from 'mongoose';
 import {
   IAsset,
   CreateAssetDTO,
   ProcessMediaJobPayload,
   AssetStatus,
   AssetQueryFilters,
-  IAssetDocument,
 } from '@dam/database';
 import { Queue } from 'bullmq';
 import * as Minio from 'minio';
+import { AssetRepository } from '../repositories/asset-repository';
 
 /**
- * AssetService - Business logic for asset management
+ * AssetService - Business logic layer
  * Handles:
- * - Asset CRUD operations
+ * - Orchestrating repository and external services
  * - File uploads to MinIO
  * - Queue job creation
+ * - Business logic validation
  */
 export class AssetService {
   constructor(
-    private assetModel: Model<IAssetDocument>,
+    private repository: AssetRepository,
     private minioClient: Minio.Client,
     private assetQueue: Queue
   ) {}
 
   /**
-   * Create a new asset
+   * Create a new asset with file upload
    */
   async createAsset(data: CreateAssetDTO): Promise<IAsset> {
     try {
-      const asset = await this.assetModel.create({
-        filename: data.filename,
-        originalName: data.originalName,
-        mimeType: data.mimeType,
-        size: data.size,
-        providerPath: data.providerPath,
-        status: AssetStatus.PENDING,
-        updatedAt: new Date(),
-      });
-      return asset.toObject();
+      return await this.repository.create(data);
     } catch (error) {
       throw new Error(`Failed to create asset: ${error}`);
     }
@@ -48,18 +39,14 @@ export class AssetService {
    * Get asset by ID
    */
   async getAssetById(id: string): Promise<IAsset | null> {
-    const asset = await this.assetModel.findById(id).lean();
-    return asset as IAsset | null;
+    return this.repository.findById(id);
   }
 
   /**
    * Get all assets with optional filters
    */
   async getAllAssets(filters?: AssetQueryFilters): Promise<IAsset[]> {
-    const query: any = {};
-    if (filters?.status) query.status = filters.status;
-    if (filters?.mimeType) query.mimeType = filters.mimeType;
-    return this.assetModel.find(query).lean();
+    return this.repository.findAll(filters);
   }
 
   /**
@@ -70,12 +57,7 @@ export class AssetService {
     status: AssetStatus,
     error?: string
   ): Promise<IAsset | null> {
-    const updateData: any = { status, updatedAt: new Date() };
-    if (error) updateData.error = error;
-    const asset = await this.assetModel
-      .findByIdAndUpdate(id, updateData, { new: true })
-      .lean();
-    return asset as IAsset | null;
+    return this.repository.updateStatus(id, status, error);
   }
 
   /**
@@ -95,6 +77,7 @@ export class AssetService {
         fileBuffer.length,
         metadata
       );
+      console.log(`✅ File uploaded to MinIO: ${objectName} (${fileBuffer.length} bytes)`);
       return fileBuffer.length;
     } catch (error) {
       throw new Error(`MinIO upload failed: ${error}`);
@@ -159,8 +142,7 @@ export class AssetService {
       }
 
       // Delete from database
-      const result = await this.assetModel.findByIdAndDelete(id);
-      return !!result;
+      return await this.repository.delete(id);
     } catch (error) {
       throw new Error(`Failed to delete asset: ${error}`);
     }
@@ -170,14 +152,20 @@ export class AssetService {
    * Get assets by status
    */
   async getAssetsByStatus(status: AssetStatus): Promise<IAsset[]> {
-    const assets = await this.assetModel.find({ status }).lean();
-    return assets as IAsset[];
+    return this.repository.findByStatus(status);
   }
 
   /**
    * Count total assets
    */
   async countAssets(): Promise<number> {
-    return this.assetModel.countDocuments();
+    return this.repository.count();
+  }
+
+  /**
+   * Get paginated assets
+   */
+  async getAssetsPaginated(page: number, pageSize: number): Promise<{ data: IAsset[]; total: number }> {
+    return this.repository.findPaginated(page, pageSize);
   }
 }
