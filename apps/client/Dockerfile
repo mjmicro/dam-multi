@@ -1,35 +1,23 @@
-FROM node:20-alpine AS builder
-
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
-
-WORKDIR /app
-
-# Copy workspace configuration
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages ./packages
-COPY apps/client ./apps/client
-
-# Install dependencies and build
-RUN pnpm install --force
-RUN pnpm --filter @dam/client run build
-
-# Production stage
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install serve
-RUN npm install -g serve
+# Copy package.json and install dependencies
+COPY apps/client/package.json ./
+RUN npm install
 
-# Copy built app from builder
-COPY --from=builder /app/apps/client/dist ./dist
+# Copy client source files only (skip node_modules that were just installed)
+COPY apps/client/src ./src
+COPY apps/client/public ./public
+COPY apps/client/index.html ./
+COPY apps/client/tsconfig.json ./
+COPY apps/client/tsconfig.node.json ./
+COPY apps/client/vite.config.ts ./
+COPY apps/client/postcss.config.js ./
+COPY apps/client/tailwind.config.js ./
 
-# Set environment variables
-# ENV NODE_ENV=production
-# ENV VITE_API_URL=http://api:4000
-
+# Expose port
 EXPOSE 3000
 
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Run vite in development mode with hot reload
+CMD ["npm", "run", "dev"]
