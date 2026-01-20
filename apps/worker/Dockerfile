@@ -11,20 +11,17 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy root workspace files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/database ./packages/database
-COPY apps/worker/package.json ./apps/worker/
-COPY apps/worker/src ./apps/worker/src
-COPY apps/worker/tsconfig.json ./apps/worker/
+# Copy package.json and install dependencies
+COPY apps/worker/package.json ./
+RUN npm install
 
-# Install pnpm and dependencies
-RUN npm install -g pnpm && pnpm install --force
+# Create symbolic link to the database package in node_modules
+RUN mkdir -p node_modules/@dam && \
+    ln -s ../../packages/database node_modules/@dam/database
 
-# Build database package first
-RUN pnpm --filter @dam/database run build
+# Copy worker source files only (skip node_modules)
+COPY apps/worker/src ./src
+COPY apps/worker/tsconfig.json ./
 
-# Build worker (compile TypeScript to JS)
-RUN pnpm --filter @dam/worker run build
-
-CMD ["node", "apps/worker/dist/index.js"]
+# Run in development mode with nodemon for hot reload
+CMD ["npm", "run", "dev"]

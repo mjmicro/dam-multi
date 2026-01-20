@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # --- DATABASE LAYER ---
   mongo:
@@ -37,21 +39,17 @@ services:
       - MINIO_ENDPOINT_EXTERNAL=http://localhost:9000
       - MINIO_ACCESS_KEY=admin
       - MINIO_SECRET_KEY=password
+      - NODE_ENV=development
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./packages/database:/app/packages/database
     depends_on:
       - mongo
       - redis
+      - minio
     networks:
       - media_network
-    develop:
-      watch:
-        - path: ./apps/api/src
-          action: rebuild
-        - path: ./packages/database
-          action: rebuild
-        - path: ./apps/api/package.json
-          action: rebuild
-        - path: ./pnpm-lock.yaml
-          action: rebuild
+
   # --- OBJECT STORAGE ---
   minio:
     image: minio/minio:latest
@@ -82,22 +80,16 @@ services:
       - MINIO_ENDPOINT=minio
       - MINIO_ACCESS_KEY=admin
       - MINIO_SECRET_KEY=password
+      - NODE_ENV=development
+    volumes:
+      - ./apps/worker/src:/app/src
+      - ./packages/database:/app/packages/database
     depends_on:
       - mongo
       - redis
       - minio
     networks:
       - media_network
-    develop:
-      watch:
-        - path: ./apps/worker/src
-          action: rebuild
-        - path: ./packages/database
-          action: rebuild
-        - path: ./apps/worker/package.json
-          action: rebuild
-        - path: ./pnpm-lock.yaml
-          action: rebuild
 
   # --- FRONTEND ---
   client:
@@ -110,20 +102,14 @@ services:
       - "3001:3000"
     environment:
       - VITE_API_URL=http://localhost:4001
+    volumes:
+      - ./apps/client/src:/app/src
+      - ./apps/client/public:/app/public
+      - ./apps/client/index.html:/app/index.html
     depends_on:
       - api
     networks:
       - media_network
-    develop:
-      watch:
-        - path: ./apps/client/src
-          action: rebuild
-        - path: ./apps/client/dist
-          action: rebuild
-        - path: ./apps/client/package.json
-          action: rebuild
-        - path: ./pnpm-lock.yaml
-          action: rebuild
 
 networks:
   media_network:

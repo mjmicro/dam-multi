@@ -1,22 +1,9 @@
 {
-  "name": "media-processor-monorepo",
+  "name": "media-processor",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm install && pnpm --filter '@dam/database' build && concurrently 'pnpm --filter @dam/api run dev' 'pnpm --filter @dam/client run dev' 'pnpm --filter @dam/worker run dev'",
-    "dev:api": "pnpm --filter @dam/api run dev",
-    "dev:client": "pnpm --filter @dam/client run dev",
-    "dev:worker": "pnpm --filter @dam/worker run dev",
-    "build": "pnpm --filter \"*\" run build",
     "docker:dev": "docker compose up --build",
-    "docker:stop": "docker compose down",
-    "lint": "pnpm --filter \"*\" run lint"
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.2",
-    "eslint": "9.39.2",
-    "prettier": "^3.7.4",
-    "ts-node": "10.9.2",
-    "turbo": "latest",
-    "typescript": "^5.9.3"
+    "docker:stop": "docker compose down"
   }
 }
