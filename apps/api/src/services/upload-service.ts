@@ -11,7 +11,6 @@
  */
 
 import * as Minio from 'minio';
-import { Queue } from 'bullmq';
 import { CreateAssetDTO } from '@dam/database';
 import { AssetService } from './asset-service';
 
@@ -84,6 +83,9 @@ export class UploadService {
     // Generate object name
     const objectName = this.generateObjectName(request.originalName);
 
+    if(await this.fileExistsInMinIO(objectName)) {
+      throw new Error(`File with name ${objectName} already exists in storage`);
+    }
     // Upload to MinIO
     await this.uploadToMinIO(objectName, buffer, request.mimeType);
 
@@ -117,74 +119,9 @@ export class UploadService {
   }
 
   /**
-   * Get presigned PUT URL for direct MinIO upload
-   */
-  async getPresignedUploadUrl(fileName: string): Promise<PresignedUrlResponse> {
-    if (!fileName) {
-      throw new Error('fileName is required');
-    }
-
-    const objectName = this.generateObjectName(fileName);
-
-    try {
-      // Generate presigned URL (valid for 5 minutes)
-      const url = await this.minioClient.presignedPutObject(
-        this.bucketName,
-        objectName,
-        60 * 5 // 5 minutes
-      );
-
-      return {
-        url,
-        objectName,
-        expiresIn: 300, // 5 minutes in seconds
-      };
-    } catch (error) {
-      throw new Error(`Failed to generate presigned URL: ${error}`);
-    }
-  }
-
-  /**
-   * Finalize upload after presigned URL upload
-   */
-  async finalizePresignedUpload(request: FinalizeRequest): Promise<UploadResponse> {
-    // Validate request
-    this.validateFinalizeRequest(request);
-    this.validateFileSize(request.size);
-
-    // Create asset record
-    const assetData: CreateAssetDTO = {
-      filename: request.objectName,
-      originalName: request.originalName,
-      mimeType: request.mimeType,
-      size: request.size,
-      providerPath: request.objectName,
-    };
-
-    const asset = await this.assetService.createAsset(assetData);
-
-    // Queue for processing
-    const jobId = await this.assetService.queueAssetForProcessing(
-      (asset._id as string).toString(),
-      request.originalName,
-      request.mimeType,
-      request.objectName
-    );
-
-    return {
-      assetId: (asset._id as string).toString(),
-      objectName: request.objectName,
-      jobId,
-      filename: request.originalName,
-      size: request.size,
-      status: asset.status,
-    };
-  }
-
-  /**
    * Check if file exists in MinIO
    */
-  async fileExists(objectName: string): Promise<boolean> {
+  async fileExistsInMinIO(objectName: string): Promise<boolean> {
     try {
       await this.minioClient.statObject(this.bucketName, objectName);
       return true;

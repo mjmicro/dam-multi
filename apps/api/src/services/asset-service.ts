@@ -49,16 +49,6 @@ export class AssetService {
     return this.repository.findAll(filters);
   }
 
-  /**
-   * Update asset status
-   */
-  async updateAssetStatus(
-    id: string,
-    status: AssetStatus,
-    error?: string
-  ): Promise<IAsset | null> {
-    return this.repository.updateStatus(id, status, error);
-  }
 
   /**
    * Upload file to MinIO
@@ -81,21 +71,6 @@ export class AssetService {
       return fileBuffer.length;
     } catch (error) {
       throw new Error(`MinIO upload failed: ${error}`);
-    }
-  }
-
-  /**
-   * Check if file exists in MinIO
-   */
-  async fileExistsInMinIO(bucket: string, objectName: string): Promise<boolean> {
-    try {
-      await this.minioClient.statObject(bucket, objectName);
-      return true;
-    } catch (error: any) {
-      if (error.code === 'NotFound' || error.message.includes('Not Found')) {
-        return false;
-      }
-      throw error;
     }
   }
 
@@ -160,12 +135,5 @@ export class AssetService {
    */
   async countAssets(): Promise<number> {
     return this.repository.count();
-  }
-
-  /**
-   * Get paginated assets
-   */
-  async getAssetsPaginated(page: number, pageSize: number): Promise<{ data: IAsset[]; total: number }> {
-    return this.repository.findPaginated(page, pageSize);
   }
 }

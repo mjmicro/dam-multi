@@ -86,11 +86,6 @@ export class ApiClient {
     return response.data;
   }
 
-  async getHealth(): Promise<{ status: string }> {
-    const response = await this.client.get('/health');
-    return response.data;
-  }
-
   private fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();

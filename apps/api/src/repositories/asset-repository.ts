@@ -48,17 +48,6 @@ export class AssetRepository {
     return this.assetModel.find(query).lean();
   }
 
-  /**
-   * Update asset status
-   */
-  async updateStatus(id: string, status: AssetStatus, error?: string): Promise<IAsset | null> {
-    const updateData: any = { status, updatedAt: new Date() };
-    if (error) updateData.error = error;
-    const asset = await this.assetModel
-      .findByIdAndUpdate(id, updateData, { new: true })
-      .lean();
-    return asset as IAsset | null;
-  }
 
   /**
    * Delete asset
@@ -80,17 +69,5 @@ export class AssetRepository {
    */
   async findByStatus(status: AssetStatus): Promise<IAsset[]> {
     return this.assetModel.find({ status }).lean();
-  }
-
-  /**
-   * Get assets with pagination
-   */
-  async findPaginated(page: number = 1, pageSize: number = 10): Promise<{ data: IAsset[]; total: number }> {
-    const skip = (page - 1) * pageSize;
-    const [data, total] = await Promise.all([
-      this.assetModel.find().skip(skip).limit(pageSize).lean(),
-      this.assetModel.countDocuments(),
-    ]);
-    return { data, total };
   }
 }
