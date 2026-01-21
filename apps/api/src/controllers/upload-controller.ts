@@ -55,3 +55,46 @@ export const uploadFile = async (req: Request, res: Response) => {
     });
   }
 };
+
+
+/**
+ * Upload file with multipart/form-data
+ * POST /api/upload/multipart
+ * Form: file (binary)
+ */
+export const uploadFileMultipart = async (req: Request, res: Response) => {
+  const uploadService: UploadService = req.app.locals.uploadService;
+
+  try {
+    if (!uploadService) {
+      return res.status(503).json({ success: false, error: 'Upload service not initialized' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file provided in request',
+      });
+    }
+
+    // Use multer's file properties
+    const result = await uploadService.uploadFromMultipart({
+      buffer: req.file.buffer,
+      filename: req.file.originalname,
+      mimetype: req.file.mimetype,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'File uploaded and processing started',
+      data: result,
+    });
+  } catch (err: any) {
+    console.error('Multipart upload failed:', err.message);
+    const statusCode = err.message.includes('not allowed') ? 400 : 500;
+    res.status(statusCode).json({
+      success: false,
+      error: err.message,
+    });
+  }
+};

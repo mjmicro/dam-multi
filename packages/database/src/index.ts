@@ -40,16 +40,16 @@
 
 // export { getAssetModel };
 
-import mongoose from 'mongoose';
+// import mongoose from 'mongoose';
 
-// Export models
-export * from './models/Asset';
+// // Export models
+// export * from './models/Asset';
 
-// Export types and interfaces
-export * from './types/index';
+// // Export types and interfaces
+// export * from './types/index';
 
-// Professional helper to ensure we don't open multiple connections
-export const connectDB = async (uri: string) => {
-  if (mongoose.connection.readyState >= 1) return;
-  return mongoose.connect(uri);
-};
+// // Professional helper to ensure we don't open multiple connections
+// export const connectDB = async (uri: string) => {
+//   if (mongoose.connection.readyState >= 1) return;
+//   return mongoose.connect(uri);
+// };

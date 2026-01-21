@@ -156,7 +156,6 @@ dam/
 │       └── package.json
 │
 ├── docker-compose.yaml         # 6 services
-├── test-e2e.sh                 # Comprehensive test suite
 └── ARCHITECTURE.md             # Architecture docs
 ```
 

@@ -239,4 +239,59 @@ export class UploadService {
       throw new Error(`MinIO upload failed: ${error}`);
     }
   }
+
+  /**
+   * Upload file from multipart/form-data
+   */
+  async uploadFromMultipart(file: {
+    buffer: Buffer;
+    filename: string;
+    mimetype: string;
+  }): Promise<UploadResponse> {
+    // Validate file size and MIME type
+    this.validateFileSize(file.buffer.length);
+    
+    // Check MIME type
+    if (!this.ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      throw new Error(`MIME type ${file.mimetype} is not allowed`);
+    }
+
+    // Generate unique object name
+    const objectName = this.generateObjectName(file.filename);
+
+    if (await this.fileExistsInMinIO(objectName)) {
+      throw new Error(`File with name ${objectName} already exists in storage`);
+    }
+
+    // Upload to MinIO
+    await this.uploadToMinIO(objectName, file.buffer, file.mimetype);
+
+    // Create asset record in database
+    const assetData: CreateAssetDTO = {
+      filename: objectName,
+      originalName: file.filename,
+      mimeType: file.mimetype,
+      size: file.buffer.length,
+      providerPath: objectName,
+    };
+
+    const asset = await this.assetService.createAsset(assetData);
+
+    // Queue for processing
+    const jobId = await this.assetService.queueAssetForProcessing(
+      (asset._id as string).toString(),
+      file.filename,
+      file.mimetype,
+      objectName
+    );
+
+    return {
+      assetId: (asset._id as string).toString(),
+      objectName,
+      jobId,
+      filename: file.filename,
+      size: file.buffer.length,
+      status: asset.status,
+    };
+  }
 }

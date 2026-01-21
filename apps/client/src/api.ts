@@ -41,18 +41,30 @@ export class ApiClient {
     });
   }
 
+  /**
+   * Upload files using multipart/form-data
+   */
   async uploadFiles(files: File[]): Promise<UploadResponse[]> {
     const results: UploadResponse[] = [];
 
     for (const file of files) {
-      const data = await this.fileToBase64(file);
       try {
-        const response = await this.client.post<UploadResponse>('/api/upload', {
-          originalName: file.name,
-          mimeType: file.type,
-          data,
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await axios.post<any>('/api/upload/multipart', formData, {
+          baseURL: this.apiUrl,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
         });
-        results.push(response.data);
+
+        results.push({
+          message: response.data.message,
+          assetId: response.data.data.assetId,
+          objectName: response.data.data.objectName,
+          jobId: response.data.data.jobId,
+        });
       } catch (error) {
         console.error(`Failed to upload ${file.name}:`, error);
         throw error;
@@ -60,6 +72,48 @@ export class ApiClient {
     }
 
     return results;
+  }
+
+  /**
+   * Upload single file using multipart/form-data (alternative)
+   */
+  async uploadFile(file: File): Promise<UploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await axios.post<any>('/api/upload/multipart', formData, {
+      baseURL: this.apiUrl,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return {
+      message: response.data.message,
+      assetId: response.data.data.assetId,
+      objectName: response.data.data.objectName,
+      jobId: response.data.data.jobId,
+    };
+  }
+
+  /**
+   * Legacy: Upload file using base64 (kept for backward compatibility)
+   */
+  async uploadFileBase64(file: File): Promise<UploadResponse> {
+    const data = await this.fileToBase64(file);
+
+    const response = await this.client.post<any>('/api/upload', {
+      originalName: file.name,
+      mimeType: file.type,
+      data,
+    });
+
+    return {
+      message: response.data.message,
+      assetId: response.data.data.assetId,
+      objectName: response.data.data.objectName,
+      jobId: response.data.data.jobId,
+    };
   }
 
   async getAssets(status?: string): Promise<Asset[]> {
