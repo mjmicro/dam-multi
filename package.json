@@ -2,6 +2,12 @@
   "name": "media-processor",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/worker",
+    "apps/client",
+    "packages/database"
+  ],
   "scripts": {
     "docker:dev": "docker compose up --build",
     "docker:stop": "docker compose down"

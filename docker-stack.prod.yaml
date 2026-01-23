@@ -1,0 +1,344 @@
+# version: '3.8'
+
+# services:
+#   # --- DATABASE LAYER (Production) ---
+#   mongo:
+#     image: mongo:6.0
+#     deploy:
+#       placement:
+#         constraints: [node.role == manager]
+#       replicas: 1
+#       resources:
+#         limits:
+#           cpus: '2.0'
+#           memory: 2G
+#         reservations:
+#           cpus: '1.0'
+#           memory: 1G
+#     environment:
+#       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
+#       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+#       MONGO_INITDB_DATABASE: mediadb
+#     volumes:
+#       - mongo_data:/data/db
+#       - /etc/localtime:/etc/localtime:ro
+#     networks:
+#       - media_network
+#     healthcheck:
+#       test: echo 'db.adminCommand("ping")' | mongosh localhost:27017/test --quiet
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#       start_period: 30s
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "10m"
+#         max-file: "3"
+
+#   # --- QUEUE LAYER (Production) ---
+#   redis:
+#     image: redis:7-alpine
+#     deploy:
+#       placement:
+#         constraints: [node.role == manager]
+#       replicas: 1
+#       resources:
+#         limits:
+#           cpus: '1.0'
+#           memory: 1G
+#         reservations:
+#           cpus: '0.5'
+#           memory: 512M
+#     command: >
+#       redis-server
+#       --requirepass ${REDIS_PASSWORD}
+#       --appendonly yes
+#       --appendfsync everysec
+#       --maxmemory 768mb
+#       --maxmemory-policy allkeys-lru
+#       --timeout 300
+#       --tcp-keepalive 300
+#     volumes:
+#       - redis_data:/data
+#       - /etc/localtime:/etc/localtime:ro
+#     networks:
+#       - media_network
+#     healthcheck:
+#       test: redis-cli --raw incr ping
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#       start_period: 30s
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "10m"
+#         max-file: "3"
+
+#   # --- BULLMQ DASHBOARD (Production) ---
+#   bull-dashboard:
+#     image: felixmosh/bull-board:latest
+#     deploy:
+#       replicas: 1
+#       resources:
+#         limits:
+#           cpus: '0.5'
+#           memory: 512M
+#         reservations:
+#           cpus: '0.25'
+#           memory: 256M
+#       restart_policy:
+#         condition: on-failure
+#         delay: 5s
+#         max_attempts: 3
+#     ports:
+#       - target: 3000
+#         published: 3000
+#         protocol: tcp
+#         mode: ingress
+#     environment:
+#       - REDIS_HOST=redis
+#       - REDIS_PORT=6379
+#       - REDIS_PASSWORD=${REDIS_PASSWORD}
+#       - NODE_ENV=production
+#     networks:
+#       - media_network
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:3000"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 20s
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "5m"
+#         max-file: "3"
+
+#   # --- OBJECT STORAGE (Production) ---
+#   minio:
+#     image: minio/minio:latest
+#     deploy:
+#       placement:
+#         constraints: [node.role == manager]
+#       replicas: 1
+#       resources:
+#         limits:
+#           cpus: '2.0'
+#           memory: 2G
+#         reservations:
+#           cpus: '1.0'
+#           memory: 1G
+#     command: server --console-address ":9001" /data
+#     ports:
+#       - target: 9000
+#         published: 9000
+#         protocol: tcp
+#         mode: ingress
+#       - target: 9001
+#         published: 9001
+#         protocol: tcp
+#         mode: ingress
+#     environment:
+#       MINIO_ROOT_USER: ${MINIO_USER:-admin}
+#       MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
+#       MINIO_SERVER_URL: ${MINIO_SERVER_URL:-http://minio:9000}
+#       MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_URL:-http://localhost:9001}
+#     volumes:
+#       - minio_data:/data
+#       - /etc/localtime:/etc/localtime:ro
+#     networks:
+#       - media_network
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+#       interval: 30s
+#       timeout: 20s
+#       retries: 3
+#       start_period: 40s
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "10m"
+#         max-file: "3"
+
+#   # --- API SERVICE (Production) ---
+#   api:
+#     image: ${REGISTRY:-docker.io}/${API_IMAGE:-dam-api}:${VERSION:-latest}
+#     deploy:
+#       replicas: ${API_REPLICAS:-3}
+#       update_config:
+#         parallelism: 1
+#         delay: 15s
+#         failure_action: rollback
+#       rollback_config:
+#         parallelism: 0
+#         delay: 0s
+#       resources:
+#         limits:
+#           cpus: '2.0'
+#           memory: 2G
+#         reservations:
+#           cpus: '1.0'
+#           memory: 1.25G
+#       restart_policy:
+#         condition: on-failure
+#         delay: 10s
+#         max_attempts: 5
+#         window: 120s
+#       labels:
+#         - "com.example.description=API Service"
+#         - "com.example.version=${VERSION:-latest}"
+#     ports:
+#       - target: 4000
+#         published: 4001
+#         protocol: tcp
+#         mode: ingress
+#     environment:
+#       - DATABASE_URL=mongodb://${MONGO_USER:-admin}:${MONGO_PASSWORD}@mongo:27017/mediadb?authSource=admin
+#       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+#       - MINIO_ENDPOINT=minio
+#       - MINIO_PORT=9000
+#       - MINIO_REGION=${MINIO_REGION:-us-east-3}
+#       - MINIO_USE_SSL=false
+#       - MINIO_ACCESS_KEY=${MINIO_USER:-admin}
+#       - MINIO_SECRET_KEY=${MINIO_PASSWORD}
+#       - NODE_ENV=production
+#       - LOG_LEVEL=${LOG_LEVEL:-info}
+#       - PORT=4000
+#       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3001}
+#       - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-200m}
+#       - UPLOAD_TIMEOUT=${UPLOAD_TIMEOUT:-300000}
+#       - API_TIMEOUT=${API_TIMEOUT:-300000}
+#       - SOCKET_TIMEOUT=${SOCKET_TIMEOUT:-300000}
+#       - UPLOAD_CHUNK_SIZE=${UPLOAD_CHUNK_SIZE:-10485760}
+#       - UPLOAD_RATE_LIMIT=${UPLOAD_RATE_LIMIT:-100}
+#     networks:
+#       - media_network
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 40s
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "10m"
+#         max-file: "5"
+#         labels: "service=api"
+
+#   # --- WORKER SERVICE (Production - Auto-scalable) ---
+#   worker:
+#     image: ${REGISTRY:-docker.io}/${WORKER_IMAGE:-dam-worker}:${VERSION:-latest}
+#     deploy:
+#       replicas: ${WORKER_REPLICAS:-5}
+#       update_config:
+#         parallelism: 1
+#         delay: 10s
+#       resources:
+#         limits:
+#           cpus: '2.5'
+#           memory: 2.5G
+#         reservations:
+#           cpus: '1.5'
+#           memory: 1.5G
+#       restart_policy:
+#         condition: on-failure
+#         delay: 10s
+#         max_attempts: 5
+#         window: 120s
+#       labels:
+#         - "com.example.description=Worker Service"
+#         - "com.example.autoscale=true"
+#         - "com.example.version=${VERSION:-latest}"
+#     environment:
+#       - DATABASE_URL=mongodb://${MONGO_USER:-admin}:${MONGO_PASSWORD}@mongo:27017/mediadb?authSource=admin
+#       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+#       - MINIO_ENDPOINT=minio
+#       - MINIO_ACCESS_KEY=${MINIO_USER:-admin}
+#       - MINIO_SECRET_KEY=${MINIO_PASSWORD}
+#       - NODE_ENV=production
+#       - LOG_LEVEL=${LOG_LEVEL:-info}
+#       - QUEUE_NAME=asset-processing
+#       - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-3}
+#       - WORKER_ID={{.Service.Name}}-{{.Task.Slot}}
+#     networks:
+#       - media_network
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "10m"
+#         max-file: "5"
+#         labels: "service=worker"
+
+#   # --- FRONTEND (Production) ---
+#   client:
+#     image: ${REGISTRY:-docker.io}/${CLIENT_IMAGE:-dam-client}:${VERSION:-latest}
+#     deploy:
+#       replicas: ${CLIENT_REPLICAS:-2}
+#       update_config:
+#         parallelism: 1
+#         delay: 15s
+#       resources:
+#         limits:
+#           cpus: '1.0'
+#           memory: 768M
+#         reservations:
+#           cpus: '0.5'
+#           memory: 384M
+#       restart_policy:
+#         condition: on-failure
+#         delay: 5s
+#         max_attempts: 3
+#     ports:
+#       - target: 3000
+#         published: 3001
+#         protocol: tcp
+#         mode: ingress
+#     environment:
+#       - VITE_API_URL=${VITE_API_URL:-http://localhost:4001}
+#       - NODE_ENV=production
+#     networks:
+#       - media_network
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:3000"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 20s
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "5m"
+#         max-file: "3"
+
+# networks:
+#   media_network:
+#     driver: overlay
+#     driver_opts:
+#       com.docker.network.driver.overlay.vxlanid: "4096"
+#       com.docker.network.driver.overlay.encryption: "true"
+#     ipam:
+#       config:
+#         - subnet: 10.0.0.0/24
+
+# volumes:
+#   mongo_data:
+#     driver: local
+#     driver_opts:
+#       type: none
+#       o: bind
+#       device: /home/manoj/dam-data/mongodb
+#   redis_data:
+#     driver: local
+#     driver_opts:
+#       type: none
+#       o: bind
+#       device: /home/manoj/dam-data/redis
+#   minio_data:
+#     driver: local
+#     driver_opts:
+#       type: none
+#       o: bind
+#       device: /home/manoj/dam-data/minio

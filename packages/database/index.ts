@@ -20,25 +20,55 @@ export { AssetStatus } from './src/types';
 export { getAssetModel, createAssetSchema, type IAssetDocument } from './src/models/Asset';
 export { getThumbnailModel, createThumbnailSchema, type IThumbnailDocument } from './src/models/Thumbnail';
 
-/**
- * Connect to MongoDB
- * @param mongoUrl MongoDB connection string (optional, uses env or default)
- */
-export async function connectDB(mongoUrl?: string): Promise<void> {
-  const url =
-    mongoUrl ||
-    process.env.DATABASE_URL ||
-    process.env.MONGO_URL ||
-    'mongodb://mongo:27017/mediadb';
+// Auto-connect on module load
+const mongoUrl = process.env.DATABASE_URL || process.env.MONGO_URL || 'mongodb://mongo:27017/mediadb';
+console.log('[database] Connecting to MongoDB:', mongoUrl);
 
-  try {
-    await mongoose.connect(url, {
-      autoIndex: false,
-    });
-  } catch (error) {
-    console.error('Failed to connect to MongoDB:', error);
-    throw error;
+// Store the connection promise
+const connectionPromise = mongoose.connect(mongoUrl, {
+  autoIndex: false,
+  maxPoolSize: 10,
+  minPoolSize: 10,
+  serverSelectionTimeoutMS: 30000,
+  socketTimeoutMS: 0,  // No timeout
+  connectTimeoutMS: 30000,
+  retryWrites: true,
+  retryReads: true,
+  keepAlive: true,
+  waitQueueTimeoutMS: 60000,  // Longer wait for queue
+});
+
+connectionPromise.catch(err => {
+  console.error('[database] Connection failed:', err);
+  process.exit(1);
+});
+
+/**
+ * Wait for MongoDB connection to be ready
+ */
+export async function waitForConnection(maxWaitMs: number = 60000): Promise<void> {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      // Check readyState
+      if (mongoose.connection.readyState !== 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        continue;
+      }
+      
+      // Also perform a ping to ensure connection is really working
+      const adminDb = mongoose.connection.getClient().db('admin');
+      await adminDb.command({ ping: 1 });
+      
+      console.log('[database] ✅ Connection verified and responding!');
+      return;
+    } catch (err) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   }
+  
+  throw new Error(`MongoDB connection timeout after ${maxWaitMs}ms`);
 }
 
 /**
@@ -56,7 +86,7 @@ export function getConnectionStatus(): number {
 }
 
 export default {
-  connectDB,
+  waitForConnection,
   disconnectDB,
   getConnectionStatus,
 };

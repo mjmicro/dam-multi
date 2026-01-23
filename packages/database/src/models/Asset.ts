@@ -1,4 +1,5 @@
 import { Schema, Model, Document } from 'mongoose';
+import mongoose from 'mongoose';
 import { AssetStatus } from '../types';
 
 /**
@@ -93,11 +94,16 @@ export const createAssetSchema = (): Schema<IAssetDocument> => {
 
 /**
  * Get or create Asset model
+ * Always uses the mongoose instance from this module (which has the active connection)
  */
-export function getAssetModel(mongooseInstance: typeof import('mongoose')): Model<IAssetDocument> {
-  if (mongooseInstance.models.Asset) {
-    return mongooseInstance.models.Asset;
+export function getAssetModel(mongooseInstance?: typeof import('mongoose')): Model<IAssetDocument> {
+  // Always use the module's mongoose instance which has the connection
+  const instance = mongoose;
+  
+  if (instance.models.Asset) {
+    return instance.models.Asset;
   }
+  
   const schema = createAssetSchema();
-  return mongooseInstance.model<IAssetDocument>('Asset', schema);
+  return instance.model<IAssetDocument>('Asset', schema);
 }

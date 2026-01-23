@@ -1,29 +1,169 @@
-# version: '3.8'
-# services:
-#   api:
-#     image: my-app-api:latest
-#     deploy:
-#       replicas: 2
-#     environment:
-#       - DATABASE_URL=postgresql://...
-#       - REDIS_URL=redis://redis:6379
+version: '3.8'
 
-#   worker:
-#     image: my-app-worker:latest
-#     deploy:
-#       replicas: 5  # Scale this based on CPU load
-#       resources:
-#         limits:
-#           cpus: '1.0'
-#           memory: 2G
-#     depends_on:
-#       - redis
+services:
+  # MongoDB - Document database
+  mongo:
+    image: mongo:6.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-secure-mongo-pass-12345}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-mediadb}
+    command: --auth
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    networks:
+      - media_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    ports:
+      - target: 27017
+        published: 27017
+        protocol: tcp
+        mode: host
 
-#   redis:
-#     image: redis:alpine
-#     volumes:
-#       - redis_data:/data
+  # Redis - Message queue & caching
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-secure-redis-pass-67890}
+    volumes:
+      - redis_data:/data
+    networks:
+      - media_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+    ports:
+      - target: 6379
+        published: 6379
+        protocol: tcp
+        mode: host
 
-#   minio:
-#     image: minio/minio
-#     command: server /data --console-address ":9001"
+  # MinIO - S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-secure-minio-pass-11111}
+    volumes:
+      - minio_data:/data
+    networks:
+      - media_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+    ports:
+      - target: 9000
+        published: 9000
+        protocol: tcp
+        mode: host
+      - target: 9001
+        published: 9001
+        protocol: tcp
+        mode: host
+
+  # Express API Server
+  api:
+    image: ${REGISTRY:-docker.io}/dam-api:${VERSION:-latest}
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - PORT=4000
+      - DATABASE_URL=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin&retryWrites=true&w=majority
+      - MONGO_URL=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-secure-redis-pass-67890}@redis:6379
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_USE_SSL=false
+      - MINIO_ACCESS_KEY=${MINIO_USER:-admin}
+      - MINIO_SECRET_KEY=${MINIO_PASSWORD:-secure-minio-pass-11111}
+      - MINIO_BUCKET=assets
+      - MINIO_REGION=${MINIO_REGION:-us-east-1}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3001}
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-200m}
+      - UPLOAD_TIMEOUT=${UPLOAD_TIMEOUT:-300000}
+      - API_TIMEOUT=${API_TIMEOUT:-300000}
+      - SOCKET_TIMEOUT=${SOCKET_TIMEOUT:-300000}
+    networks:
+      - media_network
+    deploy:
+      replicas: ${API_REPLICAS:-1}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 768M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    ports:
+      - target: 4000
+        published: 4001
+        protocol: tcp
+        mode: ingress
+    depends_on:
+      - mongo
+      - redis
+      - minio
+
+  # Media Processing Worker
+  worker:
+    image: ${REGISTRY:-docker.io}/dam-worker:${VERSION:-latest}
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DATABASE_URL=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin&retryWrites=true&w=majority
+      - MONGO_URL=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-secure-redis-pass-67890}@redis:6379
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_USE_SSL=false
+      - MINIO_ACCESS_KEY=${MINIO_USER:-admin}
+      - MINIO_SECRET_KEY=${MINIO_PASSWORD:-secure-minio-pass-11111}
+      - MINIO_BUCKET=assets
+      - MINIO_REGION=us-east-1
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-3}
+    networks:
+      - media_network
+    deploy:
+      replicas: ${WORKER_REPLICAS:-4}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '2'
+          memory: 1G
+    depends_on:
+      - redis
+      - minio
+
+networks:
+  media_network:
+    driver: overlay
+
+volumes:
+  mongo_data:
+  mongo_config:
+  redis_data:
+  minio_data:

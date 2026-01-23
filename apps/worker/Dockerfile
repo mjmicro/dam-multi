@@ -11,17 +11,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy package.json and install dependencies
-COPY apps/worker/package.json ./
+# Copy ALL root monorepo files
+COPY . .
+
+# Install dependencies with workspaces from root
 RUN npm install
 
-# Create symbolic link to the database package in node_modules
-RUN mkdir -p node_modules/@dam && \
-    ln -s ../../packages/database node_modules/@dam/database
-
-# Copy worker source files only (skip node_modules)
-COPY apps/worker/src ./src
-COPY apps/worker/tsconfig.json ./
-
-# Run in development mode with nodemon for hot reload
-CMD ["npm", "run", "dev"]
+# For Docker Swarm, run directly with ts-node (no watch mode needed)
+CMD ["npx", "ts-node", "apps/worker/src/index.ts"]

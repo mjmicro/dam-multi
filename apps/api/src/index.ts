@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 import * as Minio from 'minio';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
-import { getAssetModel, connectDB as connectDatabase } from '@dam/database';
+import { getAssetModel, waitForConnection } from '@dam/database';
 import { corsMiddleware } from './middleware/cors';
 import { getConfig } from './config/config';
 import { AssetService } from './services/asset-service';
@@ -13,6 +13,9 @@ import { UploadService } from './services/upload-service';
 import assetRouter from './routes/asset-routes';
 import uploadRouter from './routes/upload-routes';
 
+console.log('[API index.ts] Loading...');
+
+// Trigger nodemon reload v4
 const app = express();
 const config = getConfig();
 
@@ -28,9 +31,17 @@ app.use('/api/upload', uploadRouter);
 // Bootstrap: Initialize all services
 (async () => {
   try {
-    // Connect DB
-    await connectDatabase(config.database.mongoUrl);
-    console.log('✅ MongoDB connected');
+    console.log(`[STARTUP] Starting up...`);
+    
+    console.log(`[STARTUP] About to wait for MongoDB connection...`);
+    try {
+      // Wait for MongoDB connection initiated by database module on import
+      await waitForConnection(60000);
+      console.log('✅ MongoDB connected');
+    } catch (dbErr) {
+      console.error(`[STARTUP] Database connection error:`, dbErr);
+      throw dbErr;
+    }
 
     // Initialize repository & services
     const AssetModel = getAssetModel(mongoose);
