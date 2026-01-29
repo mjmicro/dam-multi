@@ -142,7 +142,7 @@ services:
     networks:
       - media_network
     deploy:
-      replicas: ${WORKER_REPLICAS:-4}
+      replicas: ${WORKER_REPLICAS:-2}
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -153,7 +153,7 @@ services:
           memory: 2G
         reservations:
           cpus: '2'
-          memory: 1G
+          memory: 2G
     depends_on:
       - redis
       - minio

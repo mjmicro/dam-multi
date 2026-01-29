@@ -7,8 +7,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy ALL root monorepo files
-COPY . .
+COPY package*.json ./
+COPY apps/api/ ./apps/api
+COPY packages/database ./packages/database
 
 # Install dependencies with workspaces from root
 RUN npm install

@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy ALL root monorepo files
-COPY . .
+COPY package*.json ./
+COPY apps/worker/ ./apps/worker
+COPY packages/database ./packages/database
 
 # Install dependencies with workspaces from root
 RUN npm install
 
-# For Docker Swarm, run directly with ts-node (no watch mode needed)
-CMD ["npx", "ts-node", "apps/worker/src/index.ts"]
+CMD ["npm", "-w", "worker", "run", "dev"]
