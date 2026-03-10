@@ -15,8 +15,8 @@ export const App: React.FC = () => {
   // Load assets on mount and polling
   useEffect(() => {
     loadAssets();
-    // const interval = setInterval(loadAssets, 3000); // Poll every 3 seconds
-    // return () => clearInterval(interval);
+    const interval = setInterval(loadAssets, 3000); // Poll every 3 seconds
+    return () => clearInterval(interval);
   }, []);
 
   const loadAssets = async () => {
@@ -70,7 +70,7 @@ export const App: React.FC = () => {
       {/* Header */}
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">📺 Digital Asset Manager</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Digital Asset Manager</h1>
           <p className="text-gray-600 mt-2">
             Upload, process, and manage your media files
           </p>
@@ -98,7 +98,7 @@ export const App: React.FC = () => {
           <FileUpload onFilesSelected={handleFilesSelected} isLoading={isUploading} />
           {uploadedFiles.length > 0 && (
             <p className="text-green-600 mt-2">
-              ✅ {uploadedFiles.length} file(s) uploaded successfully
+              {uploadedFiles.length} file(s) uploaded successfully
             </p>
           )}
         </section>

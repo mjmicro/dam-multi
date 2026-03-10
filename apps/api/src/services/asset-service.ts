@@ -67,7 +67,7 @@ export class AssetService {
         fileBuffer.length,
         metadata
       );
-      console.log(`✅ File uploaded to MinIO: ${objectName} (${fileBuffer.length} bytes)`);
+      console.log(`File uploaded to MinIO: ${objectName} (${fileBuffer.length} bytes)`);
       return fileBuffer.length;
     } catch (error) {
       throw new Error(`MinIO upload failed: ${error}`);

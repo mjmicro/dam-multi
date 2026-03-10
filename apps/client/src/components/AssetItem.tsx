@@ -62,8 +62,8 @@ export const AssetItem: React.FC<AssetItemProps> = ({
             }}
           />
         ) : (
-          <div className="text-4xl">
-            {isImage ? '🖼️' : isVideo ? '🎬' : isAudio ? '🎵' : '📄'}
+          <div className="text-4xl text-gray-400">
+            {isImage ? 'Image' : isVideo ? 'Video' : isAudio ? 'Audio' : 'File'}
           </div>
         )}
         <span

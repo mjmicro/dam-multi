@@ -37,10 +37,10 @@ export const connectDB = async (uri: string) => {
       throw new Error(`Connection not ready! readyState: ${readyState} (expected 1)`);
     }
     
-    console.log('✅ MongoDB connection verified - readyState = 1 (CONNECTED)');
+    console.log('MongoDB connection verified - readyState = 1 (CONNECTED)');
     return connection;
   } catch (error) {
-    console.error('❌ MongoDB connection failed:', error);
+    console.error('MongoDB connection failed:', error);
     throw error;
   }
 };

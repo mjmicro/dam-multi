@@ -41,7 +41,7 @@ async function startWorker(): Promise<void> {
     // Connect to MongoDB
     await mongoose.connect(mongoUrl, { autoIndex: false });
     const Asset = getAssetModel(mongoose);
-    console.log('✅ Worker: Mongoose connected to', mongoUrl);
+    console.log('Worker: Mongoose connected to', mongoUrl);
 
     // Initialize Redis connection for BullMQ
     const redisConnection = new IORedis(redisUrl, {
@@ -49,7 +49,7 @@ async function startWorker(): Promise<void> {
       enableReadyCheck: false,
     });
 
-    console.log('✅ Worker: Redis connected');
+    console.log('Worker: Redis connected');
 
     // Create queue
     const assetQueue = new Queue('asset-tasks', { connection: redisConnection });
@@ -62,7 +62,7 @@ async function startWorker(): Promise<void> {
     const worker = new Worker('asset-tasks', async (job) => {
       const { assetId, filename, mimeType, providerPath } =
         job.data as ProcessMediaJobPayload;
-      console.log(`🔄 Processing job ${job.id} for asset ${assetId}`);
+      console.log(`Processing job ${job.id} for asset ${assetId}`);
 
       try {
         // Update status to PROCESSING
@@ -70,7 +70,7 @@ async function startWorker(): Promise<void> {
           status: AssetStatus.PROCESSING,
           updatedAt: new Date(),
         });
-        console.log(`   📝 Status updated to ${AssetStatus.PROCESSING}`);
+        console.log(`   Status updated to ${AssetStatus.PROCESSING}`);
 
         // Check if object exists in MinIO with retry
         let fileFound = false;
@@ -81,19 +81,19 @@ async function startWorker(): Promise<void> {
           try {
             const objStat = await minioClient.statObject('assets', providerPath);
             console.log(
-              `   ✅ File found in MinIO (attempt ${attempt}): ${objStat.size} bytes`
+              `   File found in MinIO (attempt ${attempt}): ${objStat.size} bytes`
             );
             fileFound = true;
             break;
           } catch (err: any) {
             if (attempt < maxAttempts) {
               console.log(
-                `   ⏳ Attempt ${attempt}: File not found yet, retrying in ${retryDelayMs}ms...`
+                `   Attempt ${attempt}: File not found yet, retrying in ${retryDelayMs}ms...`
               );
               await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
             } else {
               console.log(
-                `   ⚠️  File not found in MinIO after ${maxAttempts} attempts: ${err.message}`
+                `   File not found in MinIO after ${maxAttempts} attempts: ${err.message}`
               );
             }
           }
@@ -116,20 +116,20 @@ async function startWorker(): Promise<void> {
           const result = await mediaProcessor.processImage(assetId, providerPath);
           metadata = result.metadata;
           thumbnailPath = result.thumbnailPath;
-          console.log(`   🖼️  Image processed with thumbnail`);
+          console.log(`   Image processed with thumbnail`);
         } else if (isVideo) {
           const result = await mediaProcessor.processVideo(assetId, providerPath);
           metadata = result.metadata;
           thumbnailPath = result.thumbnailPath;
           transcodedFiles = result.transcodedFiles;
           console.log(
-            `   🎬 Video processed: ${transcodedFiles.length} resolutions`
+            `   Video processed: ${transcodedFiles.length} resolutions`
           );
         } else if (isAudio) {
           // For audio, just extract metadata
           const tempPath = await mediaProcessor.downloadFromMinIO(providerPath);
           metadata = await mediaProcessor.extractVideoMetadata(tempPath);
-          console.log(`   🎵 Audio metadata extracted`);
+          console.log(`   Audio metadata extracted`);
         }
 
         // Update asset with metadata and processed status
@@ -143,7 +143,7 @@ async function startWorker(): Promise<void> {
           updatedAt: new Date(),
         });
 
-        console.log(`   ✅ Asset ${assetId} marked as PROCESSED`);
+        console.log(`   Asset ${assetId} marked as PROCESSED`);
 
         // Cleanup temp files
         await mediaProcessor.cleanup(assetId);
@@ -157,7 +157,7 @@ async function startWorker(): Promise<void> {
           transcodedCount: transcodedFiles.length,
         };
       } catch (err: any) {
-        console.error(`   ❌ Job failed: ${err.message}`);
+        console.error(`   Job failed: ${err.message}`);
         // Update status to FAILED
         await Asset.findByIdAndUpdate(assetId, {
           status: AssetStatus.FAILED,
@@ -177,14 +177,14 @@ async function startWorker(): Promise<void> {
     }, { connection: redisConnection });
 
     worker.on('completed', (job) => {
-      console.log(`✅ Job ${job.id} completed successfully`);
+      console.log(`Job ${job.id} completed successfully`);
     });
 
     worker.on('failed', (job, err) => {
-      console.error(`❌ Job ${job?.id} failed:`, err.message);
+      console.error(`Job ${job?.id} failed:`, err.message);
     });
 
-    console.log('👷 Media Worker Ready - Watch Mode Enabled - Listening for jobs...');
+    console.log('Media Worker Ready - Watch Mode Enabled - Listening for jobs...');
 
     // Graceful shutdown
     process.on('SIGTERM', async () => {
@@ -195,7 +195,7 @@ async function startWorker(): Promise<void> {
       process.exit(0);
     });
   } catch (err: any) {
-    console.error('❌ Worker init error:', err.message);
+    console.error('Worker init error:', err.message);
     process.exit(1);
   }
 }

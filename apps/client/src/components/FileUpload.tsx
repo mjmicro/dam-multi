@@ -46,7 +46,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         accept="image/*,video/*,audio/*"
       />
       <label htmlFor="file-input" className="cursor-pointer">
-        <div className="text-4xl mb-4">📁</div>
         <p className="text-lg font-semibold text-gray-700 mb-2">
           {isLoading ? 'Uploading...' : 'Drag & drop files here'}
         </p>

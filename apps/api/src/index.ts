@@ -37,7 +37,7 @@ app.use('/api/upload', uploadRouter);
     try {
       // Wait for MongoDB connection initiated by database module on import
       await waitForConnection(60000);
-      console.log('✅ MongoDB connected');
+      console.log('MongoDB connected');
     } catch (dbErr) {
       console.error(`[STARTUP] Database connection error:`, dbErr);
       throw dbErr;
@@ -46,7 +46,7 @@ app.use('/api/upload', uploadRouter);
     // Initialize repository & services
     const AssetModel = getAssetModel(mongoose);
     const assetRepository = new AssetRepository(AssetModel);
-    console.log('✅ AssetRepository initialized');
+    console.log('AssetRepository initialized');
 
     // MinIO setup
     const minioClient = new Minio.Client({
@@ -61,9 +61,9 @@ app.use('/api/upload', uploadRouter);
     const bucketExists = await minioClient.bucketExists(config.minio.bucketName);
     if (!bucketExists) {
       await minioClient.makeBucket(config.minio.bucketName, config.minio.region);
-      console.log(`✅ MinIO bucket "${config.minio.bucketName}" created`);
+      console.log(`MinIO bucket "${config.minio.bucketName}" created`);
     } else {
-      console.log(`✅ MinIO bucket "${config.minio.bucketName}" exists`);
+      console.log(`MinIO bucket "${config.minio.bucketName}" exists`);
     }
 
     // Redis & BullMQ setup
@@ -79,15 +79,15 @@ app.use('/api/upload', uploadRouter);
     const uploadService = new UploadService(minioClient, assetService, config.minio.bucketName);
     app.locals.uploadService = uploadService;
 
-    console.log('✅ Services initialized');
+    console.log('Services initialized');
 
     // Start server
     app.listen(config.app.port, () => {
-      console.log(`🚀 API Server Ready - http://localhost:${config.app.port}`);
+      console.log(`API Server Ready - http://localhost:${config.app.port}`);
       console.log(`Environment: ${config.app.env}`);
     });
   } catch (err) {
-    console.error('❌ Fatal error:', err);
+    console.error('Fatal error:', err);
     process.exit(1);
   }
 })();

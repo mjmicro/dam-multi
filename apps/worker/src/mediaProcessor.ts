@@ -293,7 +293,7 @@ export class MediaProcessor {
       // Skip transcoding if source is lower than preset
       if (heightFromResolution > maxHeight) {
         console.log(
-          `⏭️  Skipping ${preset.resolution} (source is ${maxHeight}p)`
+          `Skipping ${preset.resolution} (source is ${maxHeight}p)`
         );
         continue;
       }
@@ -319,7 +319,7 @@ export class MediaProcessor {
           .size(sizeStr)
           .on('error', reject)
           .on('end', () => {
-            console.log(`✅ Transcoded to ${preset.resolution}: ${outputPath}`);
+            console.log(`Transcoded to ${preset.resolution}: ${outputPath}`);
             resolve();
           })
           .run();
@@ -341,7 +341,7 @@ export class MediaProcessor {
     metadata: MediaMetadata;
     thumbnailPath: string;
   }> {
-    console.log(`🖼️  Processing image: ${objectName}`);
+    console.log(`Processing image: ${objectName}`);
 
     const localPath = await this.downloadFromMinIO(objectName);
     const metadata = await this.extractImageMetadata(localPath);
@@ -355,7 +355,7 @@ export class MediaProcessor {
     const minioThumbnailPath = `thumbnails/${thumbnailFileName}`;
     await this.uploadToMinIO(thumbnailPath, minioThumbnailPath);
 
-    console.log(`✅ Image processed: ${JSON.stringify(metadata)}`);
+    console.log(`Image processed: ${JSON.stringify(metadata)}`);
 
     return {
       metadata,
@@ -374,7 +374,7 @@ export class MediaProcessor {
     thumbnailPath: string;
     transcodedFiles: Array<{ resolution: string; path: string }>;
   }> {
-    console.log(`🎬 Processing video: ${objectName}`);
+    console.log(`Processing video: ${objectName}`);
 
     const localPath = await this.downloadFromMinIO(objectName);
     const metadata = await this.extractVideoMetadata(localPath);
@@ -407,7 +407,7 @@ export class MediaProcessor {
     }
 
     console.log(
-      `✅ Video processed: ${JSON.stringify(metadata)}, ${transcodedFiles.length} resolutions`
+      `Video processed: ${JSON.stringify(metadata)}, ${transcodedFiles.length} resolutions`
     );
 
     return {
@@ -424,7 +424,7 @@ export class MediaProcessor {
     try {
       const assetTempDir = path.join(this.tempDir, assetId);
       await fs.rm(assetTempDir, { recursive: true, force: true });
-      console.log(`🧹 Cleaned up temporary files for ${assetId}`);
+      console.log(`Cleaned up temporary files for ${assetId}`);
     } catch (err) {
       console.warn(`Failed to cleanup: ${err}`);
     }

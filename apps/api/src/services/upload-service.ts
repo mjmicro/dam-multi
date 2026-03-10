@@ -139,7 +139,7 @@ export class UploadService {
   async deleteFile(objectName: string): Promise<void> {
     try {
       await this.minioClient.removeObject(this.bucketName, objectName);
-      console.log(`✓ Deleted from MinIO: ${objectName}`);
+      console.log(`Deleted from MinIO: ${objectName}`);
     } catch (error) {
       console.warn(`Warning: Failed to delete ${objectName} from MinIO: ${error}`);
     }
@@ -233,7 +233,7 @@ export class UploadService {
         { 'Content-Type': mimeType }
       );
       console.log(
-        `✓ File uploaded to MinIO: ${objectName} (${(buffer.length / 1024).toFixed(2)}KB)`
+        `File uploaded to MinIO: ${objectName} (${(buffer.length / 1024).toFixed(2)}KB)`
       );
     } catch (error) {
       throw new Error(`MinIO upload failed: ${error}`);

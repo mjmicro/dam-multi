@@ -61,7 +61,7 @@ export async function waitForConnection(maxWaitMs: number = 60000): Promise<void
       const adminDb = mongoose.connection.getClient().db('admin');
       await adminDb.command({ ping: 1 });
       
-      console.log('[database] ✅ Connection verified and responding!');
+      console.log('[database] Connection verified and responding!');
       return;
     } catch (err) {
       await new Promise(resolve => setTimeout(resolve, 500));
