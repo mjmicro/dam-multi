@@ -11,5 +11,8 @@
   "scripts": {
     "docker:dev": "docker compose up --build",
     "docker:stop": "docker compose down"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
   }
 }
