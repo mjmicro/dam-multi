@@ -1,17 +1,24 @@
 {
-  "name": "worker",
+  "name": "@dam/worker",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec \"ts-node\" src/index.ts",
-    "build": "tsc src/index.ts --outDir dist --module commonjs --target ES2020 --esModuleInterop",
-    "start": "node dist/index.js"
+    "build": "tsc --build",
+    "start": "node dist/index.js",
+    "lint": "eslint src --max-warnings 0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@dam/database": "workspace:*",
     "bullmq": "^5.0.0",
     "dotenv": "^16.3.1",
     "fluent-ffmpeg": "^2.1.2",
     "minio": "^7.1.3",
+    "ioredis": "^5.3.2",
     "mongoose": "^7.3.0",
     "sharp": "^0.33.0"
   },

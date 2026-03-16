@@ -54,7 +54,7 @@ export const createThumbnailSchema = (): Schema<IThumbnailDocument> => {
     {
       collection: 'thumbnails',
       timestamps: false,
-    }
+    },
   );
 };
 
@@ -62,10 +62,10 @@ export const createThumbnailSchema = (): Schema<IThumbnailDocument> => {
  * Get or create Thumbnail model
  * Always uses the mongoose instance from this module (which has the active connection)
  */
-export function getThumbnailModel(mongooseInstance?: typeof import('mongoose')): Model<IThumbnailDocument> {
+export function getThumbnailModel(): Model<IThumbnailDocument> {
   // Always use the module's mongoose instance which has the connection
   const instance = mongoose;
-  
+
   if (instance.models.Thumbnail) {
     return instance.models.Thumbnail;
   }

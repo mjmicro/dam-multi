@@ -10,6 +10,11 @@ services:
       - mongo_data:/data/db
     networks:
       - media_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # --- QUEUE LAYER ---
   redis:
@@ -31,20 +36,23 @@ services:
     ports:
       - "4001:4000"
     environment:
-      - DATABASE_URL=mongodb://mongo:27017/mediadb
-      - REDIS_URL=redis://redis:6379
-      - MINIO_ENDPOINT=minio
-      - MINIO_ENDPOINT_EXTERNAL=http://localhost:9000
-      - MINIO_ACCESS_KEY=admin
-      - MINIO_SECRET_KEY=password
-      - NODE_ENV=development
+      - MONGODB_URI=${MONGODB_URI}
+      - REDIS_URL=${REDIS_URL}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ENDPOINT_EXTERNAL=${MINIO_ENDPOINT_EXTERNAL}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - NODE_ENV=${NODE_ENV}
     volumes:
       - ./apps/api:/app/apps/api
       - ./packages/database:/app/packages/database
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
     networks:
       - media_network
 
@@ -57,8 +65,8 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      - MINIO_ROOT_USER=admin
-      - MINIO_ROOT_PASSWORD=password
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     command: server --console-address ":9001" /data
     volumes:
       - ./data/minio:/data
@@ -73,41 +81,44 @@ services:
     container_name: media_worker
     restart: always
     environment:
-      - DATABASE_URL=mongodb://mongo:27017/mediadb
-      - REDIS_URL=redis://redis:6379
-      - MINIO_ENDPOINT=minio
-      - MINIO_ACCESS_KEY=admin
-      - MINIO_SECRET_KEY=password
-      - NODE_ENV=development
+      - MONGODB_URI=${MONGODB_URI}
+      - REDIS_URL=${REDIS_URL}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - NODE_ENV=${NODE_ENV}
     volumes:
       - ./apps/worker:/app/apps/worker
       - ./packages/database:/app/packages/database
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
     networks:
       - media_network
 
   # --- FRONTEND ---
-  client:
-    build:
-      context: .
-      dockerfile: ./apps/client/Dockerfile
-    container_name: media_client
-    restart: always
-    ports:
-      - "3001:3000"
-    environment:
-      - VITE_API_URL=http://localhost:4001
-    volumes:
-      - ./apps/client/src:/app/src
-      - ./apps/client/public:/app/public
-      - ./apps/client/index.html:/app/index.html
-    depends_on:
-      - api
-    networks:
-      - media_network
+  # client:
+  #   build:
+  #     context: .
+      # environment:
+      #   - MONGODB_URI=${MONGODB_URI}
+      #   - REDIS_URL=${REDIS_URL}
+      #   - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      #   - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      #   - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      #   - NODE_ENV=${NODE_ENV}
+  #   volumes:
+  #     - ./apps/client/src:/app/src
+  #     - ./apps/client/public:/app/public
+  #     - ./apps/client/index.html:/app/index.html
+  #   depends_on:
+  #     - api
+  #   networks:
+  #     - media_network
 
 networks:
   media_network:

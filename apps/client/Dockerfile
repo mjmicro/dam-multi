@@ -1,20 +1,34 @@
-FROM node:20-alpine
-
-ARG VITE_API_URL=http://localhost:4001
-
+FROM node:20-alpine AS base
+RUN npm install -g pnpm turbo
 WORKDIR /app
 
-# Copy ALL root monorepo files
-COPY . .
+FROM base AS installer
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN pnpm install --frozen-lockfile
 
-# Install dependencies with workspaces from root
-RUN npm install
+FROM base AS builder
+COPY --from=installer /app ./
+ARG VITE_API_URL=http://127.0.0.1:4000
+ENV VITE_API_URL=$VITE_API_URL
+RUN pnpm turbo run build --filter=client
 
-# Set environment variable for API URL
+FROM node:20-alpine AS runner
+RUN npm install -g pnpm
+WORKDIR /app
+ENV NODE_ENV=production
+
+ARG VITE_API_URL=http://127.0.0.1:4000
 ENV VITE_API_URL=$VITE_API_URL
 
-# Expose port
-EXPOSE 3000
+# Copy built assets and package files
+COPY --from=builder /app/apps/client/dist ./dist
+COPY --from=builder /app/apps/client/package.json ./package.json
 
-# Run using npx from root node_modules
-CMD ["npx", "vite", "--host", "--port", "3000"]
+# Install only production dependencies (mostly for dev server if needed)
+RUN pnpm install --prod --ignore-scripts
+
+# Serve the built app
+EXPOSE 3000
+CMD ["pnpm", "run", "preview", "--host", "--port", "3000"]

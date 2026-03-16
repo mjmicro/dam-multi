@@ -42,12 +42,11 @@ export class AssetRepository {
    * Get all assets with filters
    */
   async findAll(filters?: AssetQueryFilters): Promise<IAsset[]> {
-    const query: any = {};
+    const query: Record<string, unknown> = {};
     if (filters?.status) query.status = filters.status;
     if (filters?.mimeType) query.mimeType = filters.mimeType;
     return this.assetModel.find(query).lean();
   }
-
 
   /**
    * Delete asset

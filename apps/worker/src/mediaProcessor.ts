@@ -3,14 +3,14 @@ import * as path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import sharp from 'sharp';
 import * as Minio from 'minio';
-import { AssetStatus, IThumbnail } from '@dam/database';
+import { DEFAULT_FFMPEG_PATH, DEFAULT_FFPROBE_PATH } from './mediaProcessor/constants';
 
 // Configure FFmpeg - use system ffmpeg in Docker, fall back to static if available
 try {
   // In Docker, ffmpeg is installed via apt-get, so set it explicitly
-  ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
-  ffmpeg.setFfprobePath('/usr/bin/ffprobe');
-} catch (err) {
+  ffmpeg.setFfmpegPath(DEFAULT_FFMPEG_PATH);
+  ffmpeg.setFfprobePath(DEFAULT_FFPROBE_PATH);
+} catch {
   // If system binaries don't exist, that's okay - ffmpeg will use PATH
   console.log('Note: Using PATH for ffmpeg/ffprobe discovery');
 }
@@ -18,37 +18,22 @@ try {
 /**
  * Media file metadata
  */
-export interface MediaMetadata {
-  width?: number;
-  height?: number;
-  duration?: number;
-  bitrate?: number;
-  format?: string;
-  codec?: string;
-}
-
-/**
- * Transcoding quality preset
- */
-export interface TranscodePreset {
-  resolution: string;
-  bitrate: string;
-  outputFormat: string;
-}
-
-/**
- * Media processor class handles image and video processing
- */
+import { MediaMetadata, TranscodePreset } from './types';
+import {
+  DEFAULT_TEMP_DIR,
+  DEFAULT_TRANSCODE_PRESETS,
+  DEFAULT_THUMBNAIL_WIDTH,
+  DEFAULT_THUMBNAIL_HEIGHT,
+  DEFAULT_VIDEO_THUMBNAIL_TIME,
+  THUMBNAIL_PREFIX,
+  VIDEO_PREFIX,
+} from './mediaProcessor/constants';
 export class MediaProcessor {
   private minioClient: Minio.Client;
   private bucketName: string;
   private tempDir: string;
 
-  constructor(
-    minioClient: Minio.Client,
-    bucketName: string,
-    tempDir: string = '/tmp/dam-processing'
-  ) {
+  constructor(minioClient: Minio.Client, bucketName: string, tempDir: string = DEFAULT_TEMP_DIR) {
     this.minioClient = minioClient;
     this.bucketName = bucketName;
     this.tempDir = tempDir;
@@ -60,7 +45,7 @@ export class MediaProcessor {
   async ensureTempDir(): Promise<void> {
     try {
       await fs.mkdir(this.tempDir, { recursive: true });
-    } catch (err) {
+    } catch {
       console.warn('Temp directory already exists or error creating it');
     }
   }
@@ -74,10 +59,7 @@ export class MediaProcessor {
 
     return new Promise(async (resolve, reject) => {
       try {
-        const dataStream = await this.minioClient.getObject(
-          this.bucketName,
-          objectName
-        );
+        const dataStream = await this.minioClient.getObject(this.bucketName, objectName);
 
         dataStream.on('data', (chunk: Buffer) => dataChunks.push(chunk));
         dataStream.on('error', reject);
@@ -100,12 +82,7 @@ export class MediaProcessor {
    */
   async uploadToMinIO(localPath: string, objectName: string): Promise<void> {
     const fileContent = await fs.readFile(localPath);
-    await this.minioClient.putObject(
-      this.bucketName,
-      objectName,
-      fileContent,
-      fileContent.length
-    );
+    await this.minioClient.putObject(this.bucketName, objectName, fileContent, fileContent.length);
   }
 
   /**
@@ -113,27 +90,33 @@ export class MediaProcessor {
    */
   async extractImageMetadata(filePath: string): Promise<MediaMetadata> {
     try {
-      let metadata = await sharp(filePath).metadata();
+      const metadata = await sharp(filePath).metadata();
       return {
         width: metadata.width,
         height: metadata.height,
         format: metadata.format,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Unknown error';
       // Try to handle BMP and other formats by converting to PNG first
-      if (err.message && (err.message.includes('unsupported') || err.message.includes('BMP'))) {
+      if (errMsg && (errMsg.includes('unsupported') || errMsg.includes('BMP'))) {
         try {
           console.log('Attempting to convert image format using ffmpeg...');
           const ext = path.extname(filePath).toLowerCase();
-          
+
           // Use ffmpeg to get image info
-          return new Promise((resolve) => {
+          return await new Promise((resolve) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ffmpeg.ffprobe(filePath, (err: any, metadata: any) => {
               if (err) {
-                console.warn('Failed to extract image metadata via ffmpeg:', err.message);
+                console.warn(
+                  'Failed to extract image metadata via ffmpeg:',
+                  err instanceof Error ? err.message : 'Unknown error',
+                );
                 return resolve({});
               }
-              
+
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const videoStream = metadata.streams?.find((s: any) => s.codec_type === 'video');
               if (videoStream) {
                 resolve({
@@ -146,12 +129,12 @@ export class MediaProcessor {
               }
             });
           });
-        } catch (ffmpegErr) {
+        } catch (ffmpegErr: unknown) {
           console.warn('Failed to extract image metadata via ffmpeg:', ffmpegErr);
           return {};
         }
       }
-      console.warn('Failed to extract image metadata:', err);
+      console.warn('Failed to extract image metadata:', errMsg);
       return {};
     }
   }
@@ -161,17 +144,19 @@ export class MediaProcessor {
    */
   async extractVideoMetadata(filePath: string): Promise<MediaMetadata> {
     return new Promise((resolve) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ffmpeg.ffprobe(filePath, (err: any, metadata: any) => {
         if (err) {
-          console.warn('Failed to extract video metadata:', err.message);
+          console.warn(
+            'Failed to extract video metadata:',
+            err instanceof Error ? err.message : 'Unknown error',
+          );
           return resolve({});
         }
 
         const videoStream = metadata.streams?.find(
-          (s: any) => s.codec_type === 'video'
-        );
-        const audioStream = metadata.streams?.find(
-          (s: any) => s.codec_type === 'audio'
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (s: any) => s.codec_type === 'video',
         );
 
         resolve({
@@ -192,8 +177,8 @@ export class MediaProcessor {
   async generateImageThumbnail(
     inputPath: string,
     outputPath: string,
-    width: number = 200,
-    height: number = 200
+    width: number = DEFAULT_THUMBNAIL_WIDTH,
+    height: number = DEFAULT_THUMBNAIL_HEIGHT,
   ): Promise<void> {
     try {
       await sharp(inputPath)
@@ -203,9 +188,10 @@ export class MediaProcessor {
         })
         .jpeg({ quality: 80 })
         .toFile(outputPath);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // If Sharp fails (e.g., BMP), try using ffmpeg
-      if (err.message && err.message.includes('unsupported')) {
+      const errMsg = err instanceof Error ? err.message : 'Unknown error';
+      if (errMsg && errMsg.includes('unsupported')) {
         console.log('Sharp failed, attempting ffmpeg for thumbnail...');
         return new Promise<void>((resolve, reject) => {
           ffmpeg(inputPath)
@@ -229,9 +215,9 @@ export class MediaProcessor {
   async generateVideoThumbnail(
     inputPath: string,
     outputPath: string,
-    timemark: string = '00:00:01',
-    width: number = 200,
-    height: number = 200
+    timemark: string = DEFAULT_VIDEO_THUMBNAIL_TIME,
+    width: number = DEFAULT_THUMBNAIL_WIDTH,
+    height: number = DEFAULT_THUMBNAIL_HEIGHT,
   ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       ffmpeg(inputPath)
@@ -252,23 +238,7 @@ export class MediaProcessor {
   async transcodeVideo(
     inputPath: string,
     outputDir: string,
-    presets: TranscodePreset[] = [
-      {
-        resolution: '1080p',
-        bitrate: '5000k',
-        outputFormat: 'mp4',
-      },
-      {
-        resolution: '720p',
-        bitrate: '2500k',
-        outputFormat: 'mp4',
-      },
-      {
-        resolution: '480p',
-        bitrate: '1000k',
-        outputFormat: 'mp4',
-      },
-    ]
+    presets: TranscodePreset[] = DEFAULT_TRANSCODE_PRESETS,
   ): Promise<string[]> {
     const baseName = path.basename(inputPath, path.extname(inputPath));
     const outputFiles: string[] = [];
@@ -289,22 +259,23 @@ export class MediaProcessor {
 
     for (const preset of presets) {
       const heightFromResolution = parseInt(preset.resolution);
-      
+
       // Skip transcoding if source is lower than preset
       if (heightFromResolution > maxHeight) {
-        console.log(
-          `Skipping ${preset.resolution} (source is ${maxHeight}p)`
-        );
+        console.log(`Skipping ${preset.resolution} (source is ${maxHeight}p)`);
         continue;
       }
 
       const outputPath = path.join(
         outputDir,
-        `${baseName}_${preset.resolution}.${preset.outputFormat}`
+        `${baseName}_${preset.resolution}.${preset.outputFormat}`,
       );
 
       // Get resolution dimensions
-      const resDim = resolutionMap[preset.resolution] || { height: heightFromResolution, width: Math.round(heightFromResolution * 16 / 9) };
+      const resDim = resolutionMap[preset.resolution] || {
+        height: heightFromResolution,
+        width: Math.round((heightFromResolution * 16) / 9),
+      };
       const sizeStr = `${resDim.width}x${resDim.height}`;
 
       await new Promise<void>((resolve, reject) => {
@@ -336,7 +307,7 @@ export class MediaProcessor {
    */
   async processImage(
     assetId: string,
-    objectName: string
+    objectName: string,
   ): Promise<{
     metadata: MediaMetadata;
     thumbnailPath: string;
@@ -352,7 +323,7 @@ export class MediaProcessor {
     await this.generateImageThumbnail(localPath, thumbnailPath);
 
     // Upload thumbnail to MinIO
-    const minioThumbnailPath = `thumbnails/${thumbnailFileName}`;
+    const minioThumbnailPath = `${THUMBNAIL_PREFIX}${thumbnailFileName}`;
     await this.uploadToMinIO(thumbnailPath, minioThumbnailPath);
 
     console.log(`Image processed: ${JSON.stringify(metadata)}`);
@@ -368,7 +339,7 @@ export class MediaProcessor {
    */
   async processVideo(
     assetId: string,
-    objectName: string
+    objectName: string,
   ): Promise<{
     metadata: MediaMetadata;
     thumbnailPath: string;
@@ -385,7 +356,7 @@ export class MediaProcessor {
     await this.generateVideoThumbnail(localPath, thumbnailPath);
 
     // Upload thumbnail to MinIO
-    const minioThumbnailPath = `thumbnails/${thumbnailFileName}`;
+    const minioThumbnailPath = `${THUMBNAIL_PREFIX}${thumbnailFileName}`;
     await this.uploadToMinIO(thumbnailPath, minioThumbnailPath);
 
     // Transcode video
@@ -396,7 +367,7 @@ export class MediaProcessor {
     const transcodedFiles: Array<{ resolution: string; path: string }> = [];
     for (const filePath of transcodedPaths) {
       const fileName = path.basename(filePath);
-      const minionPath = `videos/${fileName}`;
+      const minionPath = `${VIDEO_PREFIX}${fileName}`;
       await this.uploadToMinIO(filePath, minionPath);
       const resolutionMatch = fileName.match(/_(\d+p)\./);
       const resolution = resolutionMatch ? resolutionMatch[1] : 'unknown';
@@ -407,7 +378,7 @@ export class MediaProcessor {
     }
 
     console.log(
-      `Video processed: ${JSON.stringify(metadata)}, ${transcodedFiles.length} resolutions`
+      `Video processed: ${JSON.stringify(metadata)}, ${transcodedFiles.length} resolutions`,
     );
 
     return {

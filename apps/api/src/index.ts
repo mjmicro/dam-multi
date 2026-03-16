@@ -1,10 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
-import mongoose from 'mongoose';
 import * as Minio from 'minio';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
-import { getAssetModel, waitForConnection } from '@dam/database';
+import { getAssetModel, connectDb } from '@dam/database';
 import { corsMiddleware } from './middleware/cors';
 import { getConfig } from './config/config';
 import { AssetService } from './services/asset-service';
@@ -32,11 +31,11 @@ app.use('/api/upload', uploadRouter);
 (async () => {
   try {
     console.log(`[STARTUP] Starting up...`);
-    
+
     console.log(`[STARTUP] About to wait for MongoDB connection...`);
     try {
       // Wait for MongoDB connection initiated by database module on import
-      await waitForConnection(60000);
+      await connectDb(config.database.mongoUrl);
       console.log('MongoDB connected');
     } catch (dbErr) {
       console.error(`[STARTUP] Database connection error:`, dbErr);
@@ -44,7 +43,8 @@ app.use('/api/upload', uploadRouter);
     }
 
     // Initialize repository & services
-    const AssetModel = getAssetModel(mongoose);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const AssetModel: any = getAssetModel();
     const assetRepository = new AssetRepository(AssetModel);
     console.log('AssetRepository initialized');
 
@@ -83,7 +83,7 @@ app.use('/api/upload', uploadRouter);
 
     // Start server
     app.listen(config.app.port, () => {
-      console.log(`API Server Ready - http://localhost:${config.app.port}`);
+      console.log(`API Server Ready - http://127.0.0.1:${config.app.port}`);
       console.log(`Environment: ${config.app.env}`);
     });
   } catch (err) {

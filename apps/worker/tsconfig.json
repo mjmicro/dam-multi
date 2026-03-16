@@ -1,16 +1,15 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ESNext",
+    "outDir": "./dist",
+    "rootDir": "./src",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "baseUrl": ".",
-    "paths": {
-      "@dam/database": ["../../packages/database/index.ts"]
-    },
-    "outDir": "./dist",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "strict": true
+    "strict": true,
+    "composite": true
   },
-  "include": ["src/**/*"]
+  "references": [{ "path": "../../packages/database" }],
+  "include": ["src"]
 }

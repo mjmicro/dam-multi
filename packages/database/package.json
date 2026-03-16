@@ -1,10 +1,23 @@
 {
   "name": "@dam/database",
-  "version": "1.0.0",
-  "main": "./index.ts",
-  "types": "./index.ts",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsc --build --watch",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
   "dependencies": {
-    "mongoose": "^7.3.0",
-    "dotenv": "17.2.3"
+    "mongoose": "^7.3.0"
   }
 }

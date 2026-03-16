@@ -1,7 +1,7 @@
 /**
  * Upload Service - Handles file upload operations
  * Single Responsibility: File upload logic only
- * 
+ *
  * Handles:
  * - Base64 file uploads
  * - Presigned URL generation
@@ -14,59 +14,15 @@ import * as Minio from 'minio';
 import { CreateAssetDTO } from '@dam/database';
 import { AssetService } from './asset-service';
 
-export interface UploadRequest {
-  originalName: string;
-  mimeType: string;
-  data: string; // base64 encoded
-}
-
-export interface PresignedUrlResponse {
-  url: string;
-  objectName: string;
-  expiresIn: number;
-}
-
-export interface UploadResponse {
-  assetId: string;
-  objectName: string;
-  jobId: string;
-  filename: string;
-  size: number;
-  status: string;
-}
-
-export interface FinalizeRequest {
-  objectName: string;
-  originalName: string;
-  mimeType: string;
-  size: number;
-}
+import { UploadRequest, UploadResponse, FinalizeRequest } from './types';
+import { DEFAULT_BUCKET_NAME } from '../config/constants';
+import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from './constants';
 
 export class UploadService {
-  private readonly MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-  private readonly ALLOWED_MIME_TYPES = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain',
-    'text/csv',
-    'application/json',
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'video/mp4',
-    'video/quicktime',
-    'audio/mpeg',
-    'audio/wav',
-  ];
-
   constructor(
     private minioClient: Minio.Client,
     private assetService: AssetService,
-    private bucketName: string = 'assets'
+    private bucketName: string = DEFAULT_BUCKET_NAME,
   ) {}
 
   /**
@@ -83,7 +39,7 @@ export class UploadService {
     // Generate object name
     const objectName = this.generateObjectName(request.originalName);
 
-    if(await this.fileExistsInMinIO(objectName)) {
+    if (await this.fileExistsInMinIO(objectName)) {
       throw new Error(`File with name ${objectName} already exists in storage`);
     }
     // Upload to MinIO
@@ -97,7 +53,6 @@ export class UploadService {
       size: buffer.length,
       providerPath: objectName,
     };
-
     const asset = await this.assetService.createAsset(assetData);
 
     // Queue for processing
@@ -105,7 +60,7 @@ export class UploadService {
       (asset._id as string).toString(),
       request.originalName,
       request.mimeType,
-      objectName
+      objectName,
     );
 
     return {
@@ -125,8 +80,12 @@ export class UploadService {
     try {
       await this.minioClient.statObject(this.bucketName, objectName);
       return true;
-    } catch (error: any) {
-      if (error.code === 'NotFound' || error.message.includes('Not Found')) {
+    } catch (error: unknown) {
+      const err = error as Record<string, unknown>;
+      if (
+        err.code === 'NotFound' ||
+        (typeof err.message === 'string' && err.message.includes('Not Found'))
+      ) {
         return false;
       }
       throw error;
@@ -161,7 +120,7 @@ export class UploadService {
       throw new Error('mimeType is required');
     }
 
-    if (!this.ALLOWED_MIME_TYPES.includes(request.mimeType)) {
+    if (!ALLOWED_MIME_TYPES.includes(request.mimeType)) {
       throw new Error(`MIME type ${request.mimeType} is not allowed`);
     }
   }
@@ -173,20 +132,16 @@ export class UploadService {
     if (!request.objectName || request.objectName.trim().length === 0) {
       throw new Error('objectName is required');
     }
-
     if (!request.originalName || request.originalName.trim().length === 0) {
       throw new Error('originalName is required');
     }
-
     if (!request.mimeType || request.mimeType.trim().length === 0) {
       throw new Error('mimeType is required');
     }
-
     if (!request.size || request.size <= 0) {
       throw new Error('size must be greater than 0');
     }
-
-    if (!this.ALLOWED_MIME_TYPES.includes(request.mimeType)) {
+    if (!ALLOWED_MIME_TYPES.includes(request.mimeType)) {
       throw new Error(`MIME type ${request.mimeType} is not allowed`);
     }
   }
@@ -195,12 +150,9 @@ export class UploadService {
    * Private: Validate file size
    */
   private validateFileSize(size: number): void {
-    if (size > this.MAX_FILE_SIZE) {
-      throw new Error(
-        `File size ${(size / 1024 / 1024).toFixed(2)}MB exceeds maximum of 100MB`
-      );
+    if (size > MAX_FILE_SIZE) {
+      throw new Error(`File size ${(size / 1024 / 1024).toFixed(2)}MB exceeds maximum of 100MB`);
     }
-
     if (size <= 0) {
       throw new Error('File size must be greater than 0');
     }
@@ -219,22 +171,12 @@ export class UploadService {
   /**
    * Private: Upload to MinIO
    */
-  private async uploadToMinIO(
-    objectName: string,
-    buffer: Buffer,
-    mimeType: string
-  ): Promise<void> {
+  private async uploadToMinIO(objectName: string, buffer: Buffer, mimeType: string): Promise<void> {
     try {
-      await this.minioClient.putObject(
-        this.bucketName,
-        objectName,
-        buffer,
-        buffer.length,
-        { 'Content-Type': mimeType }
-      );
-      console.log(
-        `File uploaded to MinIO: ${objectName} (${(buffer.length / 1024).toFixed(2)}KB)`
-      );
+      await this.minioClient.putObject(this.bucketName, objectName, buffer, buffer.length, {
+        'Content-Type': mimeType,
+      });
+      console.log(`File uploaded to MinIO: ${objectName} (${(buffer.length / 1024).toFixed(2)}KB)`);
     } catch (error) {
       throw new Error(`MinIO upload failed: ${error}`);
     }
@@ -250,15 +192,14 @@ export class UploadService {
   }): Promise<UploadResponse> {
     // Validate file size and MIME type
     this.validateFileSize(file.buffer.length);
-    
+
     // Check MIME type
-    if (!this.ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       throw new Error(`MIME type ${file.mimetype} is not allowed`);
     }
 
     // Generate unique object name
     const objectName = this.generateObjectName(file.filename);
-
     if (await this.fileExistsInMinIO(objectName)) {
       throw new Error(`File with name ${objectName} already exists in storage`);
     }
@@ -282,7 +223,7 @@ export class UploadService {
       (asset._id as string).toString(),
       file.filename,
       file.mimetype,
-      objectName
+      objectName,
     );
 
     return {

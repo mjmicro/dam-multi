@@ -1,22 +1,28 @@
 {
-  "name": "api",
+  "name": "@dam/api",
   "version": "1.0.0",
   "private": true,
   "main": "dist/index.js",
   "license": "MIT",
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec \"ts-node\" src/index.ts",
-    "build": "tsc",
+    "build": "tsc --build",
     "start": "node dist/index.js",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src --max-warnings 0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@dam/database": "workspace:*",
     "mongoose": "^7.3.0",
     "bullmq": "^5.0.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "minio": "^7.1.3",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "ioredis": "^5.3.2"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

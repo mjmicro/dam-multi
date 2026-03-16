@@ -3,6 +3,7 @@ import { apiClient, Asset } from './api';
 import { FileUpload } from './components/FileUpload';
 import { AssetGrid } from './components/AssetGrid';
 import './index.css';
+import { POLL_INTERVAL_MS } from './constants';
 
 export const App: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -15,7 +16,7 @@ export const App: React.FC = () => {
   // Load assets on mount and polling
   useEffect(() => {
     loadAssets();
-    const interval = setInterval(loadAssets, 3000); // Poll every 3 seconds
+    const interval = setInterval(loadAssets, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 
@@ -23,7 +24,9 @@ export const App: React.FC = () => {
     try {
       setIsLoadingAssets(true);
       const data = await apiClient.getAssets();
-      setAssets(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setAssets(
+        data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      );
       setError(null);
     } catch (err) {
       console.error('Failed to load assets:', err);
@@ -38,7 +41,7 @@ export const App: React.FC = () => {
       setIsUploading(true);
       setError(null);
       const results = await apiClient.uploadFiles(files);
-      setUploadedFiles(results.map(r => r.assetId));
+      setUploadedFiles(results.map((r) => r.assetId));
       await loadAssets(); // Refresh immediately after upload
     } catch (err) {
       console.error('Upload failed:', err);
@@ -71,9 +74,7 @@ export const App: React.FC = () => {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <h1 className="text-3xl font-bold text-gray-900">Digital Asset Manager</h1>
-          <p className="text-gray-600 mt-2">
-            Upload, process, and manage your media files
-          </p>
+          <p className="text-gray-600 mt-2">Upload, process, and manage your media files</p>
         </div>
       </header>
 
@@ -83,10 +84,7 @@ export const App: React.FC = () => {
         {error && (
           <div className="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
             {error}
-            <button
-              onClick={() => setError(null)}
-              className="float-right font-bold"
-            >
+            <button onClick={() => setError(null)} className="float-right font-bold">
               ×
             </button>
           </div>
@@ -114,13 +112,13 @@ export const App: React.FC = () => {
             <div className="bg-green-50 p-4 rounded-lg">
               <p className="text-gray-600">Processed</p>
               <p className="text-3xl font-bold text-green-600">
-                {assets.filter(a => a.status === 'PROCESSED').length}
+                {assets.filter((a) => a.status === 'PROCESSED').length}
               </p>
             </div>
             <div className="bg-yellow-50 p-4 rounded-lg">
               <p className="text-gray-600">Processing</p>
               <p className="text-3xl font-bold text-yellow-600">
-                {assets.filter(a => a.status === 'PROCESSING' || a.status === 'PENDING').length}
+                {assets.filter((a) => a.status === 'PROCESSING' || a.status === 'PENDING').length}
               </p>
             </div>
           </div>

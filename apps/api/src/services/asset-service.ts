@@ -8,6 +8,7 @@ import {
 import { Queue } from 'bullmq';
 import * as Minio from 'minio';
 import { AssetRepository } from '../repositories/asset-repository';
+import { DEFAULT_BUCKET_NAME } from '../config/constants';
 
 /**
  * AssetService - Business logic layer
@@ -21,7 +22,7 @@ export class AssetService {
   constructor(
     private repository: AssetRepository,
     private minioClient: Minio.Client,
-    private assetQueue: Queue
+    private assetQueue: Queue,
   ) {}
 
   /**
@@ -49,7 +50,6 @@ export class AssetService {
     return this.repository.findAll(filters);
   }
 
-
   /**
    * Upload file to MinIO
    */
@@ -57,16 +57,10 @@ export class AssetService {
     bucket: string,
     objectName: string,
     fileBuffer: Buffer,
-    metadata: Record<string, string>
+    metadata: Record<string, string>,
   ): Promise<number> {
     try {
-      await this.minioClient.putObject(
-        bucket,
-        objectName,
-        fileBuffer,
-        fileBuffer.length,
-        metadata
-      );
+      await this.minioClient.putObject(bucket, objectName, fileBuffer, fileBuffer.length, metadata);
       console.log(`File uploaded to MinIO: ${objectName} (${fileBuffer.length} bytes)`);
       return fileBuffer.length;
     } catch (error) {
@@ -81,7 +75,7 @@ export class AssetService {
     assetId: string,
     filename: string,
     mimeType: string,
-    providerPath: string
+    providerPath: string,
   ): Promise<string> {
     try {
       const payload: ProcessMediaJobPayload = {
@@ -109,11 +103,9 @@ export class AssetService {
     try {
       // Delete from MinIO
       try {
-        await this.minioClient.removeObject('assets', minIOObjectName);
+        await this.minioClient.removeObject(DEFAULT_BUCKET_NAME, minIOObjectName);
       } catch (err) {
-        console.warn(
-          `Warning: Could not delete ${minIOObjectName} from MinIO: ${err}`
-        );
+        console.warn(`Warning: Could not delete ${minIOObjectName} from MinIO: ${err}`);
       }
 
       // Delete from database

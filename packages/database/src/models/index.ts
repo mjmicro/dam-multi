@@ -1,7 +1,9 @@
-/**
- * Database models barrel export
- * Exports all model definitions and factories
- */
-
-export { createAssetSchema, getAssetModel, type IAssetDocument } from './Asset';
-export { createThumbnailSchema, getThumbnailModel, type IThumbnailDocument } from './Thumbnail';
+export { getAssetModel } from './Asset.js';
+export type {
+  IAsset,
+  IAssetDocument,
+  AssetQueryFilters,
+  CreateAssetDTO,
+  ProcessMediaJobPayload,
+} from './Asset.js';
+export { AssetStatus } from '../types/index.js';

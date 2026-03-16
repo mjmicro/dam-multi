@@ -46,16 +46,16 @@ export const uploadFile = async (req: Request, res: Response) => {
       message: 'File uploaded and processing started',
       data: result,
     });
-  } catch (err: any) {
-    console.error('Upload failed:', err.message);
-    const statusCode = err.message.includes('not allowed') ? 400 : 500;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Upload failed:', errMsg);
+    const statusCode = errMsg.includes('not allowed') ? 400 : 500;
     res.status(statusCode).json({
       success: false,
-      error: err.message,
+      error: errMsg,
     });
   }
 };
-
 
 /**
  * Upload file with multipart/form-data
@@ -89,12 +89,13 @@ export const uploadFileMultipart = async (req: Request, res: Response) => {
       message: 'File uploaded and processing started',
       data: result,
     });
-  } catch (err: any) {
-    console.error('Multipart upload failed:', err.message);
-    const statusCode = err.message.includes('not allowed') ? 400 : 500;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Multipart upload failed:', errMsg);
+    const statusCode = errMsg.includes('not allowed') ? 400 : 500;
     res.status(statusCode).json({
       success: false,
-      error: err.message,
+      error: errMsg,
     });
   }
 };

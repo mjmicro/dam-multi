@@ -1,14 +1,18 @@
 import React from 'react';
+import {
+  FILE_UPLOAD_BORDER_COLOR,
+  FILE_UPLOAD_BG_COLOR,
+  FILE_UPLOAD_BG_COLOR_HOVER,
+  FILE_UPLOAD_BG_COLOR_LOADING,
+  FILE_UPLOAD_BORDER_COLOR_LOADING,
+} from '../constants/ui';
 
 interface FileUploadProps {
   onFilesSelected: (files: File[]) => void;
   isLoading: boolean;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({
-  onFilesSelected,
-  isLoading,
-}) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, isLoading }) => {
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -32,8 +36,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       }}
       className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
         isLoading
-          ? 'bg-gray-100 border-gray-300'
-          : 'border-blue-400 bg-blue-50 hover:bg-blue-100'
+          ? `${FILE_UPLOAD_BG_COLOR_LOADING} ${FILE_UPLOAD_BORDER_COLOR_LOADING}`
+          : `${FILE_UPLOAD_BORDER_COLOR} ${FILE_UPLOAD_BG_COLOR} ${FILE_UPLOAD_BG_COLOR_HOVER}`
       }`}
     >
       <input
@@ -49,9 +53,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         <p className="text-lg font-semibold text-gray-700 mb-2">
           {isLoading ? 'Uploading...' : 'Drag & drop files here'}
         </p>
-        <p className="text-gray-500">
-          or click to select files (Images, Videos, Audio)
-        </p>
+        <p className="text-gray-500">or click to select files (Images, Videos, Audio)</p>
       </label>
     </div>
   );

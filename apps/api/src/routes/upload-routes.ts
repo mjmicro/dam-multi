@@ -3,12 +3,12 @@
  * Pattern: /api/upload*
  */
 
-import express from 'express';
 import { uploadFile, uploadFileMultipart } from '../controllers/upload-controller';
 import { uploadMiddleware } from '../middleware/upload';
 
-const uploadRouter = express.Router();
+import { Router } from 'express';
 
+export const uploadRouter: Router = Router();
 /**
  * POST /api/upload - Upload file with base64 data (legacy)
  * Body: { originalName, mimeType, data: string (base64) }
@@ -22,4 +22,3 @@ uploadRouter.post('/', uploadFile);
 uploadRouter.post('/multipart', uploadMiddleware, uploadFileMultipart);
 
 export default uploadRouter;
-

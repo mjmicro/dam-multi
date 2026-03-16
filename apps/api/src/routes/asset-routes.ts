@@ -2,11 +2,11 @@
  * Asset Routes - RESTful asset endpoints
  * Pattern: /api/assets
  */
+import { Router } from 'express';
 
-import express from 'express';
 import { deleteAsset, getAsset, getStats, getAssets } from '../controllers/asset-controller';
 
-const assetRouter = express.Router();
+export const assetRouter: Router = Router();
 
 /**
  * GET /api/assets/stats - Get asset statistics

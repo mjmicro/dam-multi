@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { DEFAULT_API_URL } from './config';
 
 export interface Asset {
   _id: string;
@@ -32,7 +33,7 @@ export interface UploadResponse {
 export class ApiClient {
   private client: AxiosInstance;
 
-  constructor(private apiUrl: string = 'http://localhost:4000') {
+  constructor(private apiUrl: string = DEFAULT_API_URL) {
     this.client = axios.create({
       baseURL: apiUrl,
       headers: {
@@ -52,6 +53,7 @@ export class ApiClient {
         const formData = new FormData();
         formData.append('file', file);
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const response = await axios.post<any>('/api/upload/multipart', formData, {
           baseURL: this.apiUrl,
           headers: {
@@ -60,10 +62,10 @@ export class ApiClient {
         });
 
         results.push({
-          message: response.data.message,
-          assetId: response.data.data.assetId,
-          objectName: response.data.data.objectName,
-          jobId: response.data.data.jobId,
+          message: response.data.message as string,
+          assetId: response.data.data.assetId as string,
+          objectName: response.data.data.objectName as string,
+          jobId: response.data.data.jobId as string,
         });
       } catch (error) {
         console.error(`Failed to upload ${file.name}:`, error);
@@ -81,6 +83,7 @@ export class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await axios.post<any>('/api/upload/multipart', formData, {
       baseURL: this.apiUrl,
       headers: {
@@ -89,10 +92,10 @@ export class ApiClient {
     });
 
     return {
-      message: response.data.message,
-      assetId: response.data.data.assetId,
-      objectName: response.data.data.objectName,
-      jobId: response.data.data.jobId,
+      message: response.data.message as string,
+      assetId: response.data.data.assetId as string,
+      objectName: response.data.data.objectName as string,
+      jobId: response.data.data.jobId as string,
     };
   }
 
@@ -102,6 +105,7 @@ export class ApiClient {
   async uploadFileBase64(file: File): Promise<UploadResponse> {
     const data = await this.fileToBase64(file);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await this.client.post<any>('/api/upload', {
       originalName: file.name,
       mimeType: file.type,
@@ -109,10 +113,10 @@ export class ApiClient {
     });
 
     return {
-      message: response.data.message,
-      assetId: response.data.data.assetId,
-      objectName: response.data.data.objectName,
-      jobId: response.data.data.jobId,
+      message: response.data.message as string,
+      assetId: response.data.data.assetId as string,
+      objectName: response.data.data.objectName as string,
+      jobId: response.data.data.jobId as string,
     };
   }
 
@@ -154,5 +158,6 @@ export class ApiClient {
 }
 
 export const apiClient = new ApiClient(
-  (import.meta as any).env.VITE_API_URL
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (import.meta as any).env.VITE_API_URL as string,
 );

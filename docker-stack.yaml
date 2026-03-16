@@ -82,8 +82,8 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - PORT=4000
+      - MONGODB_URI=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin&retryWrites=true&w=majority
       - DATABASE_URL=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin&retryWrites=true&w=majority
-      - MONGO_URL=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin
       - REDIS_URL=redis://:${REDIS_PASSWORD:-secure-redis-pass-67890}@redis:6379
       - MINIO_ENDPOINT=minio
       - MINIO_PORT=9000
@@ -129,7 +129,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - DATABASE_URL=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin&retryWrites=true&w=majority
-      - MONGO_URL=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin
+      - MONGODB_URI=mongodb://admin:${MONGO_PASSWORD:-secure-mongo-pass-12345}@mongo:27017/mediadb?authSource=admin&retryWrites=true&w=majority
       - REDIS_URL=redis://:${REDIS_PASSWORD:-secure-redis-pass-67890}@redis:6379
       - MINIO_ENDPOINT=minio
       - MINIO_PORT=9000

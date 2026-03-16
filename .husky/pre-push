@@ -1,0 +1,3 @@
+#!/bin/sh
+pnpm turbo run build --filter=[HEAD^1...HEAD]
+pnpm turbo run test --filter=[HEAD^1...HEAD]
