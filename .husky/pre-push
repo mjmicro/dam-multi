@@ -1,3 +1,5 @@
 #!/bin/sh
-pnpm exec turbo run build --filter=[HEAD^1...HEAD]
-pnpm exec turbo run test --filter=[HEAD^1...HEAD]
+
+# Wrap the filter in quotes to protect the ^ and [] characters
+pnpm exec turbo run build --filter='[HEAD^1...HEAD]'
+pnpm exec turbo run test --filter='[HEAD^1...HEAD]'
