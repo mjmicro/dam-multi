@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { Worker } from 'bullmq';
-import IORedis from 'ioredis';
 import * as Minio from 'minio';
 import { getAssetModel, ProcessMediaJobPayload, AssetStatus } from '@dam/database';
 import { MediaProcessor } from './mediaProcessor';
@@ -51,9 +50,9 @@ async function startWorker(): Promise<void> {
     const Asset: any = getAssetModel();
     console.log('Worker: Mongoose connected to', mongoUrl);
 
-    // Initialize Redis connection for BullMQ
-    const redisConnection = new IORedis(redisUrl, {
-      maxRetriesPerRequest: null,
+    const connection = {
+      url: redisUrl,
+      maxRetriesPerRequest: null as null,
       retryStrategy: (times: number) => {
         console.log(`Redis connection attempt ${times}...`);
         if (times > 20) {
@@ -64,12 +63,7 @@ async function startWorker(): Promise<void> {
       },
       lazyConnect: false,
       enableOfflineQueue: true,
-    });
-
-    redisConnection.on('connect', () => console.log('Redis connected'));
-    redisConnection.on('error', (err) => console.error('Redis error:', err.message));
-
-    console.log('Worker: Redis connected');
+    };
 
     // Initialize media processor
     const mediaProcessor = new MediaProcessor(minioClient, DEFAULT_MINIO_BUCKET);
@@ -196,7 +190,7 @@ async function startWorker(): Promise<void> {
           throw err;
         }
       },
-      { connection: redisConnection },
+      { connection },
     );
 
     worker.on('completed', (job) => {
@@ -214,7 +208,6 @@ async function startWorker(): Promise<void> {
     process.on('SIGTERM', async () => {
       console.log('SIGTERM received, shutting down gracefully...');
       await worker.close();
-      await redisConnection.quit();
       await mongoose.disconnect();
       process.exit(0);
     });

@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express from 'express';
 import * as Minio from 'minio';
 import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
 import { getAssetModel, connectDb } from '@dam/database';
 import { corsMiddleware } from './middleware/cors';
 import { getConfig } from './config/config';
@@ -67,10 +66,11 @@ app.use('/api/upload', uploadRouter);
     }
 
     // Redis & BullMQ setup
-    const redisConnection = new IORedis(config.redis.url, {
+    const connection = {
+      url: config.redis.url,
       maxRetriesPerRequest: config.redis.retryPolicy.maxRetriesPerRequest,
-    });
-    const assetQueue = new Queue(config.queue.name, { connection: redisConnection });
+    };
+    const assetQueue = new Queue(config.queue.name, { connection });
 
     // Service initialization
     const assetService = new AssetService(assetRepository, minioClient, assetQueue);

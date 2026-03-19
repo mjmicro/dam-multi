@@ -57,3 +57,5 @@ data/minio/*
 
 # pnpm
 .pnpm-debug.log
+
+.history/
