@@ -11,6 +11,8 @@ import { UploadService } from './services/upload-service';
 import assetRouter from './routes/asset-routes';
 import uploadRouter from './routes/upload-routes';
 
+// const DEFAULT_JOB_ATTEMPTS = 3;
+// const DEFAULT_JOB_BACKOFF_DELAY = 2000;
 console.log('[API index.ts] Loading...');
 
 // Trigger nodemon reload v4

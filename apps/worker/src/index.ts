@@ -14,8 +14,6 @@ import {
   DEFAULT_REDIS_URL,
   DEFAULT_MAX_ATTEMPTS,
   DEFAULT_RETRY_DELAY_MS,
-
-  // ...existing code...
 } from './constants';
 
 /**
@@ -46,8 +44,7 @@ async function startWorker(): Promise<void> {
   try {
     // Connect to MongoDB
     await mongoose.connect(mongoUrl, { autoIndex: false });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Asset: any = getAssetModel();
+    const Asset = getAssetModel();
     console.log('Worker: Mongoose connected to', mongoUrl);
 
     const connection = {
@@ -65,6 +62,9 @@ async function startWorker(): Promise<void> {
       enableOfflineQueue: true,
     };
 
+    // Dead-letter queue for jobs that exhaust all retries
+    const deadLetterQueue = new Queue('asset-tasks-failed', { connection: redisConnection });
+
     // Initialize media processor
     const mediaProcessor = new MediaProcessor(minioClient, DEFAULT_MINIO_BUCKET);
     await mediaProcessor.ensureTempDir();
@@ -74,11 +74,14 @@ async function startWorker(): Promise<void> {
       'asset-tasks',
       async (job) => {
         const { assetId, mimeType, providerPath } = job.data as ProcessMediaJobPayload;
-        console.log(`Processing job ${job.id} for asset ${assetId}`);
+        console.log(
+          `Processing job ${job.id} for asset ${assetId} (attempt ${job.attemptsMade + 1}/${job.opts.attempts ?? 1})`,
+        );
 
         try {
-          // Validate required fields
+          // Validate required fields — unrecoverable, skip retries
           if (!providerPath || !mimeType) {
+            await job.discard();
             throw new Error('Missing required fields: providerPath and mimeType');
           }
 
@@ -118,11 +121,9 @@ async function startWorker(): Promise<void> {
           }
 
           // Process media based on mime type
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let metadata: any = {};
+          let metadata: Record<string, unknown> = {};
           let thumbnailPath: string | undefined;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let transcodedFiles: any[] = [];
+          let transcodedFiles: unknown[] = [];
 
           const isImage = mimeType.startsWith('image/');
           const isVideo = mimeType.startsWith('video/');
@@ -140,7 +141,6 @@ async function startWorker(): Promise<void> {
             transcodedFiles = result.transcodedFiles;
             console.log(`   Video processed: ${transcodedFiles.length} resolutions`);
           } else if (isAudio) {
-            // For audio, just extract metadata
             const tempPath = await mediaProcessor.downloadFromMinIO(providerPath);
             metadata = await mediaProcessor.extractVideoMetadata(tempPath);
             console.log(`   Audio metadata extracted`);
@@ -172,15 +172,21 @@ async function startWorker(): Promise<void> {
           };
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : 'Unknown error';
-          console.error(`   Job failed: ${errMsg}`);
-          // Update status to FAILED
-          await Asset.findByIdAndUpdate(assetId, {
-            status: AssetStatus.FAILED,
-            error: errMsg,
-            updatedAt: new Date(),
-          });
+          const isLastAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
 
-          // Try to cleanup even on failure
+          console.error(`   Job ${job.id} failed (attempt ${job.attemptsMade + 1}): ${errMsg}`);
+
+          // Only mark as FAILED on the last attempt — keep PROCESSING during retries
+          if (isLastAttempt) {
+            await Asset.findByIdAndUpdate(assetId, {
+              status: AssetStatus.FAILED,
+              error: errMsg,
+              updatedAt: new Date(),
+            });
+            console.log(`   Asset ${assetId} marked as FAILED after all retries`);
+          }
+
+          // Cleanup even on failure
           try {
             await mediaProcessor.cleanup(assetId);
           } catch (cleanupErr) {
@@ -193,13 +199,64 @@ async function startWorker(): Promise<void> {
       { connection },
     );
 
+    // Job completed successfully
     worker.on('completed', (job) => {
-      console.log(`Job ${job.id} completed successfully`);
+      console.log(`✅ Job ${job.id} completed successfully (asset: ${job.data.assetId as string})`);
     });
 
-    worker.on('failed', (job, err: unknown) => {
+    // Job failed on this attempt (may still retry)
+    worker.on('failed', async (job, err: unknown) => {
       const errMsg = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`Job ${job?.id} failed:`, errMsg);
+      const attemptsMade = job?.attemptsMade ?? 0;
+      const totalAttempts = job?.opts.attempts ?? 1;
+      const isLastAttempt = attemptsMade >= totalAttempts - 1;
+
+      console.error(
+        `❌ Job ${job?.id} failed (attempt ${attemptsMade}/${totalAttempts}): ${errMsg}`,
+      );
+
+      // Move to dead-letter queue only after all retries exhausted
+      if (isLastAttempt && job) {
+        console.warn(`🪦 Moving job ${job.id} to dead-letter queue`);
+        await deadLetterQueue.add(
+          'dead-letter',
+          {
+            originalJobId: job.id,
+            originalQueue: 'asset-tasks',
+            payload: job.data,
+            error: errMsg,
+            failedAt: new Date().toISOString(),
+            attemptsMade,
+          },
+          {
+            attempts: 1,
+            removeOnFail: false, // keep dead-letter jobs forever for inspection
+          },
+        );
+      }
+    });
+
+    // Job stalled — BullMQ will retry automatically
+    worker.on('stalled', (jobId) => {
+      console.warn(`⚠️  Job ${jobId} stalled — will be retried automatically`);
+    });
+
+    // Queue-level events for deeper observability
+    const queueEvents = new QueueEvents('asset-tasks', { connection: redisConnection });
+
+    queueEvents.on('waiting', ({ jobId }) => {
+      console.log(`⏳ Job ${jobId} waiting in queue`);
+    });
+
+    queueEvents.on('active', ({ jobId, prev }) => {
+      console.log(`▶️  Job ${jobId} is now active (prev: ${prev})`);
+    });
+
+    // All retries exhausted — hook your alerting here
+    queueEvents.on('retries-exhausted', ({ jobId, failedReason }) => {
+      console.error(`🚨 Job ${jobId} exhausted all retries: ${failedReason}`);
+      // TODO: wire up Slack / PagerDuty / email alert here
+      // await sendAlert({ jobId, reason: failedReason });
     });
 
     console.log('Media Worker Ready - Watch Mode Enabled - Listening for jobs...');
