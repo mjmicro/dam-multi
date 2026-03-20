@@ -25,8 +25,6 @@ import {
   DEFAULT_THUMBNAIL_WIDTH,
   DEFAULT_THUMBNAIL_HEIGHT,
   DEFAULT_VIDEO_THUMBNAIL_TIME,
-  THUMBNAIL_PREFIX,
-  VIDEO_PREFIX,
 } from './mediaProcessor/constants';
 export class MediaProcessor {
   private minioClient: Minio.Client;
@@ -83,6 +81,34 @@ export class MediaProcessor {
   async uploadToMinIO(localPath: string, objectName: string): Promise<void> {
     const fileContent = await fs.readFile(localPath);
     await this.minioClient.putObject(this.bucketName, objectName, fileContent, fileContent.length);
+  }
+
+  private getAssetTypeYearMonthFromObjectName(
+    objectName: string,
+    fallbackAssetType: 'audio' | 'image' | 'video',
+  ): { assetType: 'audio' | 'image' | 'video'; year: string; month: string } {
+    // Expected object key format:
+    //   /{assetType}/{year}/{month}/{filename}
+    const parts = objectName.split('/').filter(Boolean);
+    if (parts.length >= 4) {
+      const assetType = parts[0];
+      const year = parts[1];
+      const month = parts[2];
+
+      if (
+        (assetType === 'audio' || assetType === 'image' || assetType === 'video') &&
+        /^\d{4}$/.test(year) &&
+        /^\d{2}$/.test(month)
+      ) {
+        return { assetType, year, month };
+      }
+    }
+
+    // Backwards-compatible fallback for older keys without year/month segments.
+    const now = new Date();
+    const year = String(now.getUTCFullYear());
+    const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+    return { assetType: fallbackAssetType, year, month };
   }
 
   /**
@@ -317,13 +343,18 @@ export class MediaProcessor {
     const localPath = await this.downloadFromMinIO(objectName);
     const metadata = await this.extractImageMetadata(localPath);
 
+    const { assetType, year, month } = this.getAssetTypeYearMonthFromObjectName(
+      objectName,
+      'image',
+    );
+
     // Generate thumbnail
     const thumbnailFileName = `${assetId}_thumbnail.jpg`;
     const thumbnailPath = path.join(this.tempDir, thumbnailFileName);
     await this.generateImageThumbnail(localPath, thumbnailPath);
 
     // Upload thumbnail to MinIO
-    const minioThumbnailPath = `${THUMBNAIL_PREFIX}${thumbnailFileName}`;
+    const minioThumbnailPath = `${assetType}/${year}/${month}/${thumbnailFileName}`;
     await this.uploadToMinIO(thumbnailPath, minioThumbnailPath);
 
     console.log(`Image processed: ${JSON.stringify(metadata)}`);
@@ -350,13 +381,18 @@ export class MediaProcessor {
     const localPath = await this.downloadFromMinIO(objectName);
     const metadata = await this.extractVideoMetadata(localPath);
 
+    const { assetType, year, month } = this.getAssetTypeYearMonthFromObjectName(
+      objectName,
+      'video',
+    );
+
     // Generate thumbnail at 1 second mark
     const thumbnailFileName = `${assetId}_thumbnail.jpg`;
     const thumbnailPath = path.join(this.tempDir, thumbnailFileName);
     await this.generateVideoThumbnail(localPath, thumbnailPath);
 
     // Upload thumbnail to MinIO
-    const minioThumbnailPath = `${THUMBNAIL_PREFIX}${thumbnailFileName}`;
+    const minioThumbnailPath = `${assetType}/${year}/${month}/${thumbnailFileName}`;
     await this.uploadToMinIO(thumbnailPath, minioThumbnailPath);
 
     // Transcode video
@@ -367,7 +403,7 @@ export class MediaProcessor {
     const transcodedFiles: Array<{ resolution: string; path: string }> = [];
     for (const filePath of transcodedPaths) {
       const fileName = path.basename(filePath);
-      const minionPath = `${VIDEO_PREFIX}${fileName}`;
+      const minionPath = `${assetType}/${year}/${month}/${fileName}`;
       await this.uploadToMinIO(filePath, minionPath);
       const resolutionMatch = fileName.match(/_(\d+p)\./);
       const resolution = resolutionMatch ? resolutionMatch[1] : 'unknown';

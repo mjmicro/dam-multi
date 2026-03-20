@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
-import { Worker } from 'bullmq';
+import { Queue, QueueEvents, Worker } from 'bullmq';
 import * as Minio from 'minio';
 import { getAssetModel, ProcessMediaJobPayload, AssetStatus } from '@dam/database';
 import { MediaProcessor } from './mediaProcessor';
@@ -63,7 +63,7 @@ async function startWorker(): Promise<void> {
     };
 
     // Dead-letter queue for jobs that exhaust all retries
-    const deadLetterQueue = new Queue('asset-tasks-failed', { connection: redisConnection });
+    const deadLetterQueue = new Queue('asset-tasks-failed', { connection });
 
     // Initialize media processor
     const mediaProcessor = new MediaProcessor(minioClient, DEFAULT_MINIO_BUCKET);
@@ -131,18 +131,21 @@ async function startWorker(): Promise<void> {
 
           if (isImage) {
             const result = await mediaProcessor.processImage(assetId, providerPath);
-            metadata = result.metadata;
+            metadata = result.metadata as unknown as Record<string, unknown>;
             thumbnailPath = result.thumbnailPath;
             console.log(`   Image processed with thumbnail`);
           } else if (isVideo) {
             const result = await mediaProcessor.processVideo(assetId, providerPath);
-            metadata = result.metadata;
+            metadata = result.metadata as unknown as Record<string, unknown>;
             thumbnailPath = result.thumbnailPath;
             transcodedFiles = result.transcodedFiles;
             console.log(`   Video processed: ${transcodedFiles.length} resolutions`);
           } else if (isAudio) {
             const tempPath = await mediaProcessor.downloadFromMinIO(providerPath);
-            metadata = await mediaProcessor.extractVideoMetadata(tempPath);
+            metadata = (await mediaProcessor.extractVideoMetadata(tempPath)) as unknown as Record<
+              string,
+              unknown
+            >;
             console.log(`   Audio metadata extracted`);
           }
 
@@ -201,7 +204,7 @@ async function startWorker(): Promise<void> {
 
     // Job completed successfully
     worker.on('completed', (job) => {
-      console.log(`✅ Job ${job.id} completed successfully (asset: ${job.data.assetId as string})`);
+      console.log(`Job ${job.id} completed successfully (asset: ${job.data.assetId as string})`);
     });
 
     // Job failed on this attempt (may still retry)
@@ -211,9 +214,7 @@ async function startWorker(): Promise<void> {
       const totalAttempts = job?.opts.attempts ?? 1;
       const isLastAttempt = attemptsMade >= totalAttempts - 1;
 
-      console.error(
-        `❌ Job ${job?.id} failed (attempt ${attemptsMade}/${totalAttempts}): ${errMsg}`,
-      );
+      console.error(`Job ${job?.id} failed (attempt ${attemptsMade}/${totalAttempts}): ${errMsg}`);
 
       // Move to dead-letter queue only after all retries exhausted
       if (isLastAttempt && job) {
@@ -238,23 +239,23 @@ async function startWorker(): Promise<void> {
 
     // Job stalled — BullMQ will retry automatically
     worker.on('stalled', (jobId) => {
-      console.warn(`⚠️  Job ${jobId} stalled — will be retried automatically`);
+      console.warn(`Job ${jobId} stalled — will be retried automatically`);
     });
 
     // Queue-level events for deeper observability
-    const queueEvents = new QueueEvents('asset-tasks', { connection: redisConnection });
+    const queueEvents = new QueueEvents('asset-tasks', { connection });
 
     queueEvents.on('waiting', ({ jobId }) => {
-      console.log(`⏳ Job ${jobId} waiting in queue`);
+      console.log(`Job ${jobId} waiting in queue`);
     });
 
     queueEvents.on('active', ({ jobId, prev }) => {
-      console.log(`▶️  Job ${jobId} is now active (prev: ${prev})`);
+      console.log(`Job ${jobId} is now active (prev: ${prev})`);
     });
 
     // All retries exhausted — hook your alerting here
-    queueEvents.on('retries-exhausted', ({ jobId, failedReason }) => {
-      console.error(`🚨 Job ${jobId} exhausted all retries: ${failedReason}`);
+    queueEvents.on('retries-exhausted', ({ jobId, attemptsMade }) => {
+      console.error(`Job ${jobId} exhausted all retries after ${attemptsMade} attempts`);
       // TODO: wire up Slack / PagerDuty / email alert here
       // await sendAlert({ jobId, reason: failedReason });
     });

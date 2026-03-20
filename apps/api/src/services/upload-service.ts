@@ -36,9 +36,21 @@ export class UploadService {
     const buffer = Buffer.from(request.data, 'base64');
     this.validateFileSize(buffer.length);
 
-    // Generate object name
-    const objectName = this.generateObjectName(request.originalName);
+    // Generate object name: /{assetType}/{year}/{month}/{filename}
+    let objectName = this.generateObjectName(request.originalName, request.mimeType);
 
+    // If the exact key already exists, fall back to a collision-safe filename.
+    if (await this.fileExistsInMinIO(objectName)) {
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substr(2, 9);
+      objectName = this.generateObjectName(
+        request.originalName,
+        request.mimeType,
+        `${timestamp}-${random}`,
+      );
+    }
+
+    // Final safeguard: if it still exists, fail loudly to avoid overwriting.
     if (await this.fileExistsInMinIO(objectName)) {
       throw new Error(`File with name ${objectName} already exists in storage`);
     }
@@ -161,11 +173,31 @@ export class UploadService {
   /**
    * Private: Generate unique object name
    */
-  private generateObjectName(originalName: string): string {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substr(2, 9);
-    const sanitized = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    return `uploads/${timestamp}-${random}-${sanitized}`;
+  private generateObjectName(
+    originalName: string,
+    mimeType: string,
+    uniquePrefix?: string,
+  ): string {
+    const sanitized = originalName.replace(/[^a-zA-Z0-9.-]/g, '_') || 'file';
+
+    const assetType = this.getAssetTypeFromMimeType(mimeType);
+    const now = new Date();
+    const year = String(now.getUTCFullYear());
+    const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+
+    // MinIO object keys use '/' as a virtual folder separator.
+    const filename = uniquePrefix ? `${uniquePrefix}-${sanitized}` : sanitized;
+    return `${assetType}/${year}/${month}/${filename}`;
+  }
+
+  private getAssetTypeFromMimeType(mimeType: string): string {
+    // `validateUploadRequest()` already guarantees `mimeType` is in `ALLOWED_MIME_TYPES`.
+    // Use the MIME *top-level* as the folder name:
+    //   image/jpeg -> image
+    //   audio/mpeg -> audio
+    //   application/pdf -> application
+    const [topLevel] = mimeType.split('/');
+    return topLevel || 'file';
   }
 
   /**
@@ -198,8 +230,17 @@ export class UploadService {
       throw new Error(`MIME type ${file.mimetype} is not allowed`);
     }
 
-    // Generate unique object name
-    const objectName = this.generateObjectName(file.filename);
+    // Generate object name: /{assetType}/{year}/{month}/{filename}
+    let objectName = this.generateObjectName(file.filename, file.mimetype);
+
+    // If the exact key already exists, fall back to a collision-safe filename.
+    if (await this.fileExistsInMinIO(objectName)) {
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substr(2, 9);
+      objectName = this.generateObjectName(file.filename, file.mimetype, `${timestamp}-${random}`);
+    }
+
+    // Final safeguard: if it still exists, fail loudly to avoid overwriting.
     if (await this.fileExistsInMinIO(objectName)) {
       throw new Error(`File with name ${objectName} already exists in storage`);
     }
