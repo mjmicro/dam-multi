@@ -16,8 +16,8 @@ export const App: React.FC = () => {
   // Load assets on mount and polling
   useEffect(() => {
     loadAssets();
-    const interval = setInterval(loadAssets, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    // const interval = setInterval(loadAssets, POLL_INTERVAL_MS);
+    // return () => clearInterval(interval);
   }, []);
 
   const loadAssets = async () => {

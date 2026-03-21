@@ -9,6 +9,7 @@ import { Queue } from 'bullmq';
 import * as Minio from 'minio';
 import { AssetRepository } from '../repositories/asset-repository';
 import { DEFAULT_BUCKET_NAME } from '../config/constants';
+import { getConfig } from '../config/config';
 
 /**
  * AssetService - Business logic layer
@@ -23,6 +24,7 @@ export class AssetService {
     private repository: AssetRepository,
     private minioClient: Minio.Client,
     private assetQueue: Queue,
+    private minioExternalUrl: string,
   ) {}
 
   /**
@@ -127,5 +129,69 @@ export class AssetService {
    */
   async countAssets(): Promise<number> {
     return this.repository.count();
+  }
+
+  /**
+   * Generate a short-lived MinIO presigned URL for preview/download.
+   */
+  async getPresignedAssetUrl(
+    assetId: string,
+    purpose: 'preview' | 'download',
+    expiryMinutes: number,
+  ): Promise<{ url: string }> {
+    const asset = await this.getAssetById(assetId);
+
+    if (!asset) {
+      throw new Error('Asset not found');
+    }
+
+    // Enforce 15–60 minute expiry window.
+    const clampedMinutes = Math.max(15, Math.min(60, Math.floor(expiryMinutes)));
+    const expirySeconds = clampedMinutes * 60;
+
+    const objectName = asset.providerPath || asset.filename;
+    const safeOriginalName = asset.originalName.replace(/"/g, '').replace(/[\r\n]/g, '');
+
+    // MinIO presigned response overrides.
+    const reqParams: Record<string, string> = {
+      'response-content-type': asset.mimeType,
+      'response-content-disposition':
+        purpose === 'download' ? `attachment; filename="${safeOriginalName}"` : 'inline',
+    };
+
+    // Use external sign client if configured to ensure signature is valid for browser URLs
+    const signerClient = this.minioExternalUrl && this.minioExternalUrl.trim()
+      ? this.createExternalSignerClient()
+      : this.minioClient;
+
+    const signedUrl = await signerClient.presignedGetObject(
+      DEFAULT_BUCKET_NAME,
+      objectName,
+      expirySeconds,
+      reqParams,
+    );
+
+    return { url: signedUrl };
+  }
+
+  /**
+   * Create a MinIO client for external environment (for presigning).
+   * This ensures the signature is valid for URLs accessed from the browser.
+   */
+  private createExternalSignerClient(): Minio.Client {
+    const config = getConfig();
+    const externalUrl = new URL(this.minioExternalUrl);
+    const host = externalUrl.hostname || 'localhost';
+    const port = externalUrl.port ? Number(externalUrl.port) : (externalUrl.protocol === 'https:' ? 443 : 80);
+    const useSSL = externalUrl.protocol === 'https:';
+
+    return new Minio.Client({
+      endPoint: host,
+      port,
+      useSSL,
+      accessKey: config.minio.accessKey,
+      secretKey: config.minio.secretKey,
+      region: config.minio.region,
+    });
   }
 }

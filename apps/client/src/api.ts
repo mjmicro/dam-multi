@@ -135,6 +135,17 @@ export class ApiClient {
     await this.client.delete(`/api/assets/${id}`);
   }
 
+  async getPresignedUrl(
+    assetId: string,
+    purpose: 'preview' | 'download',
+    expiryMinutes: number = 30,
+  ): Promise<string> {
+    const response = await this.client.get<{ url: string }>(`/api/assets/${assetId}/presign`, {
+      params: { purpose, expiryMinutes },
+    });
+    return response.data.url;
+  }
+
   async getStats(): Promise<{
     totalAssets: number;
     byStatus: Record<string, number>;

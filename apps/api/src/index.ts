@@ -75,7 +75,12 @@ app.use('/api/upload', uploadRouter);
     const assetQueue = new Queue(config.queue.name, { connection });
 
     // Service initialization
-    const assetService = new AssetService(assetRepository, minioClient, assetQueue);
+    const assetService = new AssetService(
+      assetRepository,
+      minioClient,
+      assetQueue,
+      config.minio.externalUrl,
+    );
     app.locals.assetService = assetService;
 
     const uploadService = new UploadService(minioClient, assetService, config.minio.bucketName);

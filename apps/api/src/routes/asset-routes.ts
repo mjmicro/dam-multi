@@ -4,7 +4,7 @@
  */
 import { Router } from 'express';
 
-import { deleteAsset, getAsset, getStats, getAssets } from '../controllers/asset-controller';
+import { deleteAsset, getAsset, getPresignedAssetUrl, getStats, getAssets } from '../controllers/asset-controller';
 
 export const assetRouter: Router = Router();
 
@@ -22,6 +22,11 @@ assetRouter.get('/', getAssets);
 /**
  * GET /api/assets/:id - Get specific asset by ID
  */
+/**
+ * GET /api/assets/:id/presign - short-lived presigned URL for preview/download
+ */
+assetRouter.get('/:id/presign', getPresignedAssetUrl);
+
 assetRouter.get('/:id', getAsset);
 
 /**

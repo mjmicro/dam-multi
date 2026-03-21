@@ -47,6 +47,36 @@ export const getAsset = async (req: Request, res: Response) => {
 };
 
 /**
+ * Get a short-lived MinIO presigned URL for preview/download.
+ * Query params:
+ * - purpose: `preview` | `download` (default: preview)
+ * - expiryMinutes: number (clamped to 15–60, default: 30)
+ */
+export const getPresignedAssetUrl = async (req: Request, res: Response) => {
+  const assetService: AssetService = req.app.locals.assetService;
+
+  try {
+    if (!assetService) {
+      return res.status(503).json({ error: 'Service not initialized' });
+    }
+
+    const id = req.params.id || '';
+    const purposeParam = (req.query.purpose as string | undefined) ?? 'preview';
+    const purpose: 'preview' | 'download' =
+      purposeParam === 'download' ? 'download' : 'preview';
+
+    const expiryMinutesRaw = Number(req.query.expiryMinutes ?? 30);
+    const expiryMinutes = Number.isFinite(expiryMinutesRaw) ? expiryMinutesRaw : 30;
+
+    const { url } = await assetService.getPresignedAssetUrl(id, purpose, expiryMinutes);
+    res.json({ url });
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to generate presigned URL', details: errMsg });
+  }
+};
+
+/**
  * Delete single asset by ID
  */
 export const deleteAsset = async (req: Request, res: Response) => {
