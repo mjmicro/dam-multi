@@ -10,6 +10,7 @@ import { AssetRepository } from './repositories/asset-repository';
 import { UploadService } from './services/upload-service';
 import assetRouter from './routes/asset-routes';
 import uploadRouter from './routes/upload-routes';
+import healthRouter from './routes/health-routes';
 
 // const DEFAULT_JOB_ATTEMPTS = 3;
 // const DEFAULT_JOB_BACKOFF_DELAY = 2000;
@@ -25,6 +26,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Routes
+app.use('/api/health', healthRouter);
 app.use('/api/assets', assetRouter);
 app.use('/api/upload', uploadRouter);
 

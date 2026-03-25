@@ -77,7 +77,7 @@ res.header('Access-Control-Allow-Private-Network', 'true'); // Required for Chro
 
 ## What Has Been Removed
 
-- **Drizzle ORM** — fully removed. Do not re-introduce `drizzle-orm`, `drizzle-kit`, or any drizzle config files, schema files, or migration folders. Database access is handled via Prisma only.
+- **Drizzle ORM** — fully removed. Do not re-introduce `drizzle-orm`, `drizzle-kit`, or any drizzle config files, schema files, or migration folders. Database access is handled via mongodb
 
 ## For New Developers
 

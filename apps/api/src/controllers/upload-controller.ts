@@ -10,6 +10,12 @@
 
 import { Request, Response } from 'express';
 import { UploadService } from '../services/upload-service';
+import { ValidationError, StorageError } from '../services/types';
+
+const toHttpError = (err: unknown): { status: number; message: string } => ({
+  status: err instanceof ValidationError ? 400 : err instanceof StorageError ? 503 : 500,
+  message: err instanceof Error ? err.message : 'Unknown error',
+});
 
 /**
  * Upload file with base64 data
@@ -26,7 +32,6 @@ export const uploadFile = async (req: Request, res: Response) => {
 
     const { originalName, mimeType, data } = req.body;
 
-    // Validate basic HTTP input
     if (!originalName || !mimeType || !data) {
       return res.status(400).json({
         success: false,
@@ -34,12 +39,7 @@ export const uploadFile = async (req: Request, res: Response) => {
       });
     }
 
-    // Delegate to service (which handles all validation and processing)
-    const result = await uploadService.uploadFromBase64({
-      originalName,
-      mimeType,
-      data,
-    });
+    const result = await uploadService.uploadFromBase64({ originalName, mimeType, data });
 
     res.status(201).json({
       success: true,
@@ -47,13 +47,9 @@ export const uploadFile = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('Upload failed:', errMsg);
-    const statusCode = errMsg.includes('not allowed') ? 400 : 500;
-    res.status(statusCode).json({
-      success: false,
-      error: errMsg,
-    });
+    const { status, message } = toHttpError(err);
+    console.error('Upload failed:', message);
+    res.status(status).json({ success: false, error: message });
   }
 };
 
@@ -71,13 +67,9 @@ export const uploadFileMultipart = async (req: Request, res: Response) => {
     }
 
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'No file provided in request',
-      });
+      return res.status(400).json({ success: false, error: 'No file provided in request' });
     }
 
-    // Use multer's file properties
     const result = await uploadService.uploadFromMultipart({
       buffer: req.file.buffer,
       filename: req.file.originalname,
@@ -90,12 +82,8 @@ export const uploadFileMultipart = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('Multipart upload failed:', errMsg);
-    const statusCode = errMsg.includes('not allowed') ? 400 : 500;
-    res.status(statusCode).json({
-      success: false,
-      error: errMsg,
-    });
+    const { status, message } = toHttpError(err);
+    console.error('Multipart upload failed:', message);
+    res.status(status).json({ success: false, error: message });
   }
 };
