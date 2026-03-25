@@ -18,6 +18,7 @@ export interface Asset {
     thumbnail?: string;
     transcoded?: Array<{ resolution: string; path: string }>;
   };
+  tags: string[];
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -120,9 +121,30 @@ export class ApiClient {
     };
   }
 
-  async getAssets(status?: string): Promise<Asset[]> {
-    const params = status ? { status } : {};
+  async getAssets(filters?: {
+    status?: string;
+    name?: string;
+    tags?: string[];
+    type?: 'image' | 'video' | 'audio';
+  }): Promise<Asset[]> {
+    const params: Record<string, string> = {};
+    if (filters?.status) params.status = filters.status;
+    if (filters?.name) params.name = filters.name;
+    if (filters?.tags?.length) params.tags = filters.tags.join(',');
+    if (filters?.type) params.type = filters.type;
     const response = await this.client.get<Asset[]>('/api/assets', { params });
+    return response.data;
+  }
+
+  async addTags(assetId: string, tags: string[]): Promise<Asset> {
+    const response = await this.client.post<Asset>(`/api/assets/${assetId}/tags`, { tags });
+    return response.data;
+  }
+
+  async removeTags(assetId: string, tags: string[]): Promise<Asset> {
+    const response = await this.client.delete<Asset>(`/api/assets/${assetId}/tags`, {
+      data: { tags },
+    });
     return response.data;
   }
 

@@ -8,6 +8,7 @@ import { getConfig } from './config/config';
 import { AssetService } from './services/asset-service';
 import { AssetRepository } from './repositories/asset-repository';
 import { UploadService } from './services/upload-service';
+import { TagService } from './features/tags/tag-service';
 import assetRouter from './routes/asset-routes';
 import uploadRouter from './routes/upload-routes';
 import healthRouter from './routes/health-routes';
@@ -87,6 +88,9 @@ app.use('/api/upload', uploadRouter);
 
     const uploadService = new UploadService(minioClient, assetService, config.minio.bucketName);
     app.locals.uploadService = uploadService;
+
+    const tagService = new TagService(assetRepository);
+    app.locals.tagService = tagService;
 
     console.log('Services initialized');
 

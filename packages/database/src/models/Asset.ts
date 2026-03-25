@@ -9,6 +9,7 @@ export interface IAssetDocument extends Document {
   size: number;
   providerPath: string;
   status: AssetStatus;
+  tags: string[];
   metadata?: {
     width?: number;
     height?: number;
@@ -29,6 +30,7 @@ export interface IAsset {
   size: number;
   providerPath: string;
   status: AssetStatus;
+  tags: string[];
   metadata?: {
     width?: number;
     height?: number;
@@ -44,6 +46,9 @@ export interface IAsset {
 export interface AssetQueryFilters {
   status?: AssetStatus;
   mimeType?: string;
+  name?: string;
+  tags?: string[];
+  type?: 'image' | 'video' | 'audio';
 }
 
 export interface CreateAssetDTO {
@@ -81,6 +86,7 @@ const assetSchema = new Schema<IAssetDocument>(
       bitrate: { type: Number },
       format: { type: String },
     },
+    tags: { type: [String], default: [], index: true },
     error: { type: String },
   },
   {

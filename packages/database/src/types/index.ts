@@ -25,6 +25,7 @@ export interface IAsset {
   size: number;
   providerPath: string;
   status: AssetStatus;
+  tags: string[];
   metadata?: {
     width?: number;
     height?: number;
@@ -88,4 +89,7 @@ export interface ProcessMediaJobPayload {
 export interface AssetQueryFilters {
   status?: AssetStatus;
   mimeType?: string;
+  name?: string;
+  tags?: string[];
+  type?: 'image' | 'video' | 'audio';
 }

@@ -4,7 +4,15 @@
  */
 import { Router } from 'express';
 
-import { deleteAsset, getAsset, getPresignedAssetUrl, getStats, getAssets } from '../controllers/asset-controller';
+import {
+  deleteAsset,
+  getAsset,
+  getPresignedAssetUrl,
+  getStats,
+  getAssets,
+  addAssetTags,
+  removeAssetTags,
+} from '../controllers/asset-controller.js';
 
 export const assetRouter: Router = Router();
 
@@ -28,6 +36,13 @@ assetRouter.get('/', getAssets);
 assetRouter.get('/:id/presign', getPresignedAssetUrl);
 
 assetRouter.get('/:id', getAsset);
+
+/**
+ * POST   /api/assets/:id/tags - Add tags to asset
+ * DELETE /api/assets/:id/tags - Remove tags from asset
+ */
+assetRouter.post('/:id/tags', addAssetTags);
+assetRouter.delete('/:id/tags', removeAssetTags);
 
 /**
  * DELETE /api/assets/:id - Delete specific asset

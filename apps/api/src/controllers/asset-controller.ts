@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
-import { AssetService } from '../services/asset-service';
+import { AssetService } from '../services/asset-service.js';
 import { AssetStatus } from '@dam/database';
+import { TagService } from '../features/tags/tag-service.js';
+import { TagsBodySchema } from '../features/tags/types.js';
+import { ValidationError } from '../services/types.js';
 
 export const getAssets = async (req: Request, res: Response) => {
   const assetService: AssetService = req.app.locals.assetService;
@@ -9,10 +12,19 @@ export const getAssets = async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Service not initialized' });
     }
 
-    const { status, mimeType } = req.query;
+    const { status, mimeType, name, tags, type } = req.query;
+    const tagsArray = tags
+      ? (tags as string)
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : undefined;
     const assets = await assetService.getAllAssets({
       status: (status as AssetStatus | undefined) ?? undefined,
       mimeType: (mimeType as string | undefined) ?? undefined,
+      name: (name as string | undefined) ?? undefined,
+      tags: tagsArray,
+      type: (type as 'image' | 'video' | 'audio' | undefined) ?? undefined,
     });
 
     res.json(assets);
@@ -62,8 +74,7 @@ export const getPresignedAssetUrl = async (req: Request, res: Response) => {
 
     const id = req.params.id || '';
     const purposeParam = (req.query.purpose as string | undefined) ?? 'preview';
-    const purpose: 'preview' | 'download' =
-      purposeParam === 'download' ? 'download' : 'preview';
+    const purpose: 'preview' | 'download' = purposeParam === 'download' ? 'download' : 'preview';
 
     const expiryMinutesRaw = Number(req.query.expiryMinutes ?? 30);
     const expiryMinutes = Number.isFinite(expiryMinutesRaw) ? expiryMinutesRaw : 30;
@@ -103,6 +114,36 @@ export const deleteAsset = async (req: Request, res: Response) => {
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : 'Unknown error';
     res.status(500).json({ error: 'Delete failed', details: errMsg });
+  }
+};
+
+export const addAssetTags = async (req: Request, res: Response) => {
+  const tagService: TagService = req.app.locals.tagService;
+  try {
+    if (!tagService) return res.status(503).json({ error: 'Service not initialized' });
+    const parsed = TagsBodySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    const asset = await tagService.addTags(req.params.id, parsed.data.tags);
+    res.json(asset);
+  } catch (err: unknown) {
+    const status = err instanceof ValidationError ? 404 : 500;
+    const errMsg = err instanceof Error ? err.message : 'Unknown error';
+    res.status(status).json({ error: errMsg });
+  }
+};
+
+export const removeAssetTags = async (req: Request, res: Response) => {
+  const tagService: TagService = req.app.locals.tagService;
+  try {
+    if (!tagService) return res.status(503).json({ error: 'Service not initialized' });
+    const parsed = TagsBodySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    const asset = await tagService.removeTags(req.params.id, parsed.data.tags);
+    res.json(asset);
+  } catch (err: unknown) {
+    const status = err instanceof ValidationError ? 404 : 500;
+    const errMsg = err instanceof Error ? err.message : 'Unknown error';
+    res.status(status).json({ error: errMsg });
   }
 };
 

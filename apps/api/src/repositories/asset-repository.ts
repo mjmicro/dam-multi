@@ -45,7 +45,20 @@ export class AssetRepository {
     const query: Record<string, unknown> = {};
     if (filters?.status) query.status = filters.status;
     if (filters?.mimeType) query.mimeType = filters.mimeType;
+    if (filters?.name) query.originalName = { $regex: filters.name, $options: 'i' };
+    if (filters?.tags?.length) query.tags = { $in: filters.tags };
+    if (filters?.type) query.mimeType = { $regex: `^${filters.type}/`, $options: 'i' };
     return this.assetModel.find(query).lean();
+  }
+
+  async addTags(id: string, tags: string[]): Promise<IAsset | null> {
+    return this.assetModel
+      .findByIdAndUpdate(id, { $addToSet: { tags: { $each: tags } } }, { new: true })
+      .lean();
+  }
+
+  async removeTags(id: string, tags: string[]): Promise<IAsset | null> {
+    return this.assetModel.findByIdAndUpdate(id, { $pullAll: { tags } }, { new: true }).lean();
   }
 
   /**

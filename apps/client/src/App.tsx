@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { apiClient, Asset } from './api';
 import { FileUpload } from './components/FileUpload';
 import { AssetGrid } from './components/AssetGrid';
+import { FilterAssets } from './components/FilterAssets';
 import './index.css';
-import { POLL_INTERVAL_MS } from './constants';
 
 export const App: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -12,6 +12,7 @@ export const App: React.FC = () => {
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [filteredAssets, setFilteredAssets] = useState<Asset[] | null>(null);
 
   // Load assets on mount and polling
   useEffect(() => {
@@ -127,8 +128,15 @@ export const App: React.FC = () => {
         {/* Assets grid section */}
         <section>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Your Assets</h2>
+          <FilterAssets onResults={setFilteredAssets} />
+          {filteredAssets !== null && (
+            <p className="text-sm text-gray-500 mb-3">
+              Showing {filteredAssets.length} filtered result
+              {filteredAssets.length !== 1 ? 's' : ''}
+            </p>
+          )}
           <AssetGrid
-            assets={assets}
+            assets={filteredAssets ?? assets}
             onDelete={handleDeleteAsset}
             isDeletingId={isDeletingId}
             isLoading={isLoadingAssets}

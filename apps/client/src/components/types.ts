@@ -17,3 +17,13 @@ export interface FileUploadProps {
   onFilesSelected: (files: File[]) => void;
   isLoading: boolean;
 }
+
+export interface TagsProps {
+  assetId: string;
+  tags: string[];
+  onTagsChange: (updatedTags: string[]) => void;
+}
+
+export interface FilterAssetsProps {
+  onResults: (assets: Asset[] | null) => void;
+}
