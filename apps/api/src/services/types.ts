@@ -1,3 +1,17 @@
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+export class StorageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StorageError';
+  }
+}
+
 export interface UploadRequest {
   originalName: string;
   mimeType: string;
@@ -17,11 +31,4 @@ export interface UploadResponse {
   filename: string;
   size: number;
   status: string;
-}
-
-export interface FinalizeRequest {
-  objectName: string;
-  originalName: string;
-  mimeType: string;
-  size: number;
 }

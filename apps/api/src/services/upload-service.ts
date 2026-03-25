@@ -14,7 +14,7 @@ import * as Minio from 'minio';
 import { CreateAssetDTO } from '@dam/database';
 import { AssetService } from './asset-service';
 
-import { UploadRequest, UploadResponse, FinalizeRequest } from './types';
+import { UploadRequest, UploadResponse, ValidationError, StorageError } from './types';
 import { DEFAULT_BUCKET_NAME } from '../config/constants';
 import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from './constants';
 
@@ -42,7 +42,7 @@ export class UploadService {
     // If the exact key already exists, fall back to a collision-safe filename.
     if (await this.fileExistsInMinIO(objectName)) {
       const timestamp = Date.now();
-      const random = Math.random().toString(36).substr(2, 9);
+      const random = Math.random().toString(36).substring(2, 11);
       objectName = this.generateObjectName(
         request.originalName,
         request.mimeType,
@@ -121,40 +121,19 @@ export class UploadService {
    */
   private validateUploadRequest(request: UploadRequest): void {
     if (!request.originalName || request.originalName.trim().length === 0) {
-      throw new Error('originalName is required');
+      throw new ValidationError('originalName is required');
     }
 
     if (!request.data || request.data.trim().length === 0) {
-      throw new Error('data (base64) is required');
+      throw new ValidationError('data (base64) is required');
     }
 
     if (!request.mimeType || request.mimeType.trim().length === 0) {
-      throw new Error('mimeType is required');
+      throw new ValidationError('mimeType is required');
     }
 
     if (!ALLOWED_MIME_TYPES.includes(request.mimeType)) {
-      throw new Error(`MIME type ${request.mimeType} is not allowed`);
-    }
-  }
-
-  /**
-   * Private: Validate finalize request
-   */
-  private validateFinalizeRequest(request: FinalizeRequest): void {
-    if (!request.objectName || request.objectName.trim().length === 0) {
-      throw new Error('objectName is required');
-    }
-    if (!request.originalName || request.originalName.trim().length === 0) {
-      throw new Error('originalName is required');
-    }
-    if (!request.mimeType || request.mimeType.trim().length === 0) {
-      throw new Error('mimeType is required');
-    }
-    if (!request.size || request.size <= 0) {
-      throw new Error('size must be greater than 0');
-    }
-    if (!ALLOWED_MIME_TYPES.includes(request.mimeType)) {
-      throw new Error(`MIME type ${request.mimeType} is not allowed`);
+      throw new ValidationError(`MIME type ${request.mimeType} is not allowed`);
     }
   }
 
@@ -163,10 +142,12 @@ export class UploadService {
    */
   private validateFileSize(size: number): void {
     if (size > MAX_FILE_SIZE) {
-      throw new Error(`File size ${(size / 1024 / 1024).toFixed(2)}MB exceeds maximum of 100MB`);
+      throw new ValidationError(
+        `File size ${(size / 1024 / 1024).toFixed(2)}MB exceeds maximum of 100MB`,
+      );
     }
     if (size <= 0) {
-      throw new Error('File size must be greater than 0');
+      throw new ValidationError('File size must be greater than 0');
     }
   }
 
@@ -210,7 +191,7 @@ export class UploadService {
       });
       console.log(`File uploaded to MinIO: ${objectName} (${(buffer.length / 1024).toFixed(2)}KB)`);
     } catch (error) {
-      throw new Error(`MinIO upload failed: ${error}`);
+      throw new StorageError(`MinIO upload failed: ${error}`);
     }
   }
 
@@ -227,7 +208,7 @@ export class UploadService {
 
     // Check MIME type
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      throw new Error(`MIME type ${file.mimetype} is not allowed`);
+      throw new ValidationError(`MIME type ${file.mimetype} is not allowed`);
     }
 
     // Generate object name: /{assetType}/{year}/{month}/{filename}
@@ -236,7 +217,7 @@ export class UploadService {
     // If the exact key already exists, fall back to a collision-safe filename.
     if (await this.fileExistsInMinIO(objectName)) {
       const timestamp = Date.now();
-      const random = Math.random().toString(36).substr(2, 9);
+      const random = Math.random().toString(36).substring(2, 11);
       objectName = this.generateObjectName(file.filename, file.mimetype, `${timestamp}-${random}`);
     }
 
