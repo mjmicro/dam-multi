@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AssetItemProps } from './types';
+import { Tags } from './Tags';
 import {
   STATUS_COLORS,
   SIZE_UNITS,
@@ -16,6 +17,7 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
   const isVideo = asset.mimeType.startsWith(VIDEO_MIME_PREFIX);
   const isAudio = asset.mimeType.startsWith(AUDIO_MIME_PREFIX);
 
+  const [tags, setTags] = useState<string[]>(asset.tags ?? []);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -126,6 +128,9 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
           {/* Error message */}
           {asset.error && <p className="text-xs text-red-600 mb-2">Error: {asset.error}</p>}
 
+          {/* Tags */}
+          <Tags assetId={asset._id} tags={tags} onTagsChange={setTags} />
+
           <div className="flex gap-2 mt-2">
             <button
               type="button"
@@ -186,9 +191,7 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
             </div>
 
             <div className="px-4 py-4">
-              {isPreviewLoading && (
-                <div className="text-gray-600">Generating preview link...</div>
-              )}
+              {isPreviewLoading && <div className="text-gray-600">Generating preview link...</div>}
               {previewError && <div className="text-red-600 text-sm">{previewError}</div>}
 
               {!isPreviewLoading && previewUrl && (
@@ -200,20 +203,10 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
                       className="w-full max-h-[70vh] object-contain"
                     />
                   )}
-                  {isVideo && (
-                    <video
-                      src={previewUrl}
-                      controls
-                      className="w-full max-h-[70vh]"
-                    />
-                  )}
-                  {isAudio && (
-                    <audio src={previewUrl} controls className="w-full" />
-                  )}
+                  {isVideo && <video src={previewUrl} controls className="w-full max-h-[70vh]" />}
+                  {isAudio && <audio src={previewUrl} controls className="w-full" />}
                   {!isImage && !isVideo && !isAudio && (
-                    <div className="text-gray-600">
-                      Preview not available for this file type.
-                    </div>
+                    <div className="text-gray-600">Preview not available for this file type.</div>
                   )}
                 </>
               )}
