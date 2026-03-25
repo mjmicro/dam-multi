@@ -2,7 +2,12 @@ import 'dotenv/config';
 import mongoose from 'mongoose';
 import { Queue, QueueEvents, Worker } from 'bullmq';
 import * as Minio from 'minio';
-import { getAssetModel, ProcessMediaJobPayload, AssetStatus } from '@dam/database';
+import {
+  getAssetModel,
+  getThumbnailModel,
+  ProcessMediaJobPayload,
+  AssetStatus,
+} from '@dam/database';
 import { MediaProcessor } from './mediaProcessor';
 import {
   DEFAULT_MINIO_ENDPOINT,
@@ -45,6 +50,7 @@ async function startWorker(): Promise<void> {
     // Connect to MongoDB
     await mongoose.connect(mongoUrl, { autoIndex: false });
     const Asset = getAssetModel();
+    const Thumbnail = getThumbnailModel();
     console.log('Worker: Mongoose connected to', mongoUrl);
 
     const connection = {
@@ -155,10 +161,20 @@ async function startWorker(): Promise<void> {
             metadata: {
               ...metadata,
               transcoded: transcodedFiles,
-              thumbnail: thumbnailPath,
             },
             updatedAt: new Date(),
           });
+
+          // Save thumbnail as separate document
+          if (thumbnailPath) {
+            await Thumbnail.create({
+              assetId,
+              providerPath: thumbnailPath,
+              width: 200,
+              height: 200,
+            });
+            console.log(`   Thumbnail saved for asset ${assetId}`);
+          }
 
           console.log(`   Asset ${assetId} marked as PROCESSED`);
 

@@ -7,4 +7,6 @@ export type {
   CreateAssetDTO,
   ProcessMediaJobPayload,
 } from './models/Asset.js';
+export { getThumbnailModel } from './models/Thumbnail.js';
+export type { IThumbnailDocument } from './models/Thumbnail.js';
 export { AssetStatus } from './types/index.js';

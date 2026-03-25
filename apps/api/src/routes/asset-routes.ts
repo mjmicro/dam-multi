@@ -8,6 +8,7 @@ import {
   deleteAsset,
   getAsset,
   getPresignedAssetUrl,
+  getThumbnailPresignedUrl,
   getStats,
   getAssets,
   addAssetTags,
@@ -34,6 +35,7 @@ assetRouter.get('/', getAssets);
  * GET /api/assets/:id/presign - short-lived presigned URL for preview/download
  */
 assetRouter.get('/:id/presign', getPresignedAssetUrl);
+assetRouter.get('/:id/thumbnail/presign', getThumbnailPresignedUrl);
 
 assetRouter.get('/:id', getAsset);
 

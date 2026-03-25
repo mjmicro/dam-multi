@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AssetItemProps } from './types';
 import { Tags } from './Tags';
 import {
@@ -9,7 +9,6 @@ import {
   VIDEO_MIME_PREFIX,
   AUDIO_MIME_PREFIX,
 } from '../constants';
-import { MINIO_ASSET_BASE_URL } from '../config';
 import { apiClient } from '../api';
 
 export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeleting }) => {
@@ -22,13 +21,17 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
 
-  const getThumbnailUrl = (): string | null => {
-    if (asset.metadata?.thumbnail) {
-      return MINIO_ASSET_BASE_URL + asset.metadata.thumbnail;
-    }
-    return null;
-  };
+  useEffect(() => {
+    if (asset.status !== 'PROCESSED' || !asset._id) return;
+    apiClient
+      .getThumbnailPresignedUrl(asset._id)
+      .then(setThumbnailUrl)
+      .catch(() => {
+        // No thumbnail available — placeholder will show
+      });
+  }, [asset._id, asset.status]);
 
   const getStatusColor = (status: string) => {
     return STATUS_COLORS[status.toUpperCase()] || 'bg-gray-100 text-gray-800';
@@ -81,9 +84,9 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
       <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
         {/* Thumbnail */}
         <div className="relative h-48 bg-gray-200 flex items-center justify-center overflow-hidden">
-          {getThumbnailUrl() && (
+          {thumbnailUrl && (
             <img
-              src={getThumbnailUrl() || ''}
+              src={thumbnailUrl}
               alt={asset.originalName}
               className="w-full h-full object-cover"
               onError={(e) => {
@@ -91,7 +94,7 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
               }}
             />
           )}
-          {!getThumbnailUrl() && (
+          {!thumbnailUrl && (
             <div className="text-4xl text-gray-400">
               {isImage ? 'Image' : isVideo ? 'Video' : isAudio ? 'Audio' : 'File'}
             </div>

@@ -3,6 +3,7 @@ import { AssetService } from '../services/asset-service.js';
 import { AssetStatus } from '@dam/database';
 import { TagService } from '../features/tags/tag-service.js';
 import { TagsBodySchema } from '../features/tags/types.js';
+import { ThumbnailService } from '../features/thumbnails/thumbnail-service.js';
 import { ValidationError } from '../services/types.js';
 
 export const getAssets = async (req: Request, res: Response) => {
@@ -140,6 +141,25 @@ export const removeAssetTags = async (req: Request, res: Response) => {
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     const asset = await tagService.removeTags(req.params.id, parsed.data.tags);
     res.json(asset);
+  } catch (err: unknown) {
+    const status = err instanceof ValidationError ? 404 : 500;
+    const errMsg = err instanceof Error ? err.message : 'Unknown error';
+    res.status(status).json({ error: errMsg });
+  }
+};
+
+/**
+ * GET /api/assets/:id/thumbnail/presign — short-lived presigned URL for thumbnail
+ */
+export const getThumbnailPresignedUrl = async (req: Request, res: Response) => {
+  const thumbnailService: ThumbnailService = req.app.locals.thumbnailService;
+  try {
+    if (!thumbnailService) {
+      return res.status(503).json({ error: 'Service not initialized' });
+    }
+    const expiryMinutes = Number(req.query.expiryMinutes ?? 30);
+    const { url } = await thumbnailService.getThumbnailPresignedUrl(req.params.id, expiryMinutes);
+    res.json({ url });
   } catch (err: unknown) {
     const status = err instanceof ValidationError ? 404 : 500;
     const errMsg = err instanceof Error ? err.message : 'Unknown error';

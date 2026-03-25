@@ -2,13 +2,14 @@ import 'dotenv/config';
 import express from 'express';
 import * as Minio from 'minio';
 import { Queue } from 'bullmq';
-import { getAssetModel, connectDb } from '@dam/database';
+import { getAssetModel, getThumbnailModel, connectDb } from '@dam/database';
 import { corsMiddleware } from './middleware/cors';
 import { getConfig } from './config/config';
 import { AssetService } from './services/asset-service';
 import { AssetRepository } from './repositories/asset-repository';
 import { UploadService } from './services/upload-service';
 import { TagService } from './features/tags/tag-service';
+import { ThumbnailService } from './features/thumbnails/thumbnail-service';
 import assetRouter from './routes/asset-routes';
 import uploadRouter from './routes/upload-routes';
 import healthRouter from './routes/health-routes';
@@ -91,6 +92,14 @@ app.use('/api/upload', uploadRouter);
 
     const tagService = new TagService(assetRepository);
     app.locals.tagService = tagService;
+
+    const ThumbnailModel = getThumbnailModel();
+    const thumbnailService = new ThumbnailService(
+      ThumbnailModel,
+      minioClient,
+      config.minio.externalUrl,
+    );
+    app.locals.thumbnailService = thumbnailService;
 
     console.log('Services initialized');
 

@@ -168,6 +168,14 @@ export class ApiClient {
     return response.data.url;
   }
 
+  async getThumbnailPresignedUrl(assetId: string, expiryMinutes: number = 30): Promise<string> {
+    const response = await this.client.get<{ url: string }>(
+      `/api/assets/${assetId}/thumbnail/presign`,
+      { params: { expiryMinutes } },
+    );
+    return response.data.url;
+  }
+
   async getStats(): Promise<{
     totalAssets: number;
     byStatus: Record<string, number>;
