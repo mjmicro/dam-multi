@@ -2,7 +2,13 @@ import 'dotenv/config';
 import mongoose from 'mongoose';
 import { Queue, QueueEvents, Worker } from 'bullmq';
 import * as Minio from 'minio';
-import { getAssetModel, ProcessMediaJobPayload, AssetStatus } from '@dam/database';
+import {
+  getAssetModel,
+  getThumbnailModel,
+  getVideoRenditionModel,
+  ProcessMediaJobPayload,
+  AssetStatus,
+} from '@dam/database';
 import { MediaProcessor } from './mediaProcessor';
 import {
   DEFAULT_MINIO_ENDPOINT,
@@ -14,6 +20,8 @@ import {
   DEFAULT_REDIS_URL,
   DEFAULT_MAX_ATTEMPTS,
   DEFAULT_RETRY_DELAY_MS,
+  DEFAULT_WORKER_CONCURRENCY,
+  RESOLUTION_META,
 } from './constants';
 
 /**
@@ -45,6 +53,8 @@ async function startWorker(): Promise<void> {
     // Connect to MongoDB
     await mongoose.connect(mongoUrl, { autoIndex: false });
     const Asset = getAssetModel();
+    const Thumbnail = getThumbnailModel();
+    const VideoRendition = getVideoRenditionModel();
     console.log('Worker: Mongoose connected to', mongoUrl);
 
     const connection = {
@@ -94,12 +104,14 @@ async function startWorker(): Promise<void> {
 
           // Check if object exists in MinIO with retry
           let fileFound = false;
+          let originalFileSize = 0;
           const maxAttempts = DEFAULT_MAX_ATTEMPTS;
           const retryDelayMs = DEFAULT_RETRY_DELAY_MS;
 
           for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
               const objStat = await minioClient.statObject(DEFAULT_MINIO_BUCKET, providerPath);
+              originalFileSize = objStat.size;
               console.log(`   File found in MinIO (attempt ${attempt}): ${objStat.size} bytes`);
               fileFound = true;
               break;
@@ -123,7 +135,7 @@ async function startWorker(): Promise<void> {
           // Process media based on mime type
           let metadata: Record<string, unknown> = {};
           let thumbnailPath: string | undefined;
-          let transcodedFiles: unknown[] = [];
+          let transcodedFiles: Array<{ resolution: string; path: string }> = [];
 
           const isImage = mimeType.startsWith('image/');
           const isVideo = mimeType.startsWith('video/');
@@ -152,13 +164,58 @@ async function startWorker(): Promise<void> {
           // Update asset with metadata and processed status
           await Asset.findByIdAndUpdate(assetId, {
             status: AssetStatus.PROCESSED,
-            metadata: {
-              ...metadata,
-              transcoded: transcodedFiles,
-              thumbnail: thumbnailPath,
-            },
+            metadata,
             updatedAt: new Date(),
           });
+
+          // Save thumbnail as separate document
+          if (thumbnailPath) {
+            await Thumbnail.create({
+              assetId,
+              providerPath: thumbnailPath,
+              width: 200,
+              height: 200,
+            });
+            console.log(`   Thumbnail saved for asset ${assetId}`);
+          }
+
+          // Save video renditions (original + transcoded versions)
+          // Delete any existing renditions first to prevent duplicates on retry
+          if (isVideo) {
+            await VideoRendition.deleteMany({ assetId });
+
+            const renditionDocs = [
+              {
+                assetId,
+                label: 'original',
+                providerPath,
+                width: (metadata.width as number) ?? 0,
+                height: (metadata.height as number) ?? 0,
+                size: originalFileSize,
+                bitrate: (metadata.bitrate as number) ?? 0,
+                format: (metadata.format as string) ?? 'mp4',
+                isOriginal: true,
+              },
+              ...transcodedFiles.map(({ resolution, path: renditionPath }) => {
+                const resMeta = RESOLUTION_META[resolution];
+                return {
+                  assetId,
+                  label: resolution,
+                  providerPath: renditionPath,
+                  width: resMeta?.width ?? 0,
+                  height: resMeta?.height ?? 0,
+                  bitrate: resMeta?.bitrate ?? 0,
+                  format: 'mp4',
+                  isOriginal: false,
+                };
+              }),
+            ];
+
+            await VideoRendition.insertMany(renditionDocs);
+            console.log(
+              `   Renditions saved: original + ${transcodedFiles.length} transcoded versions`,
+            );
+          }
 
           console.log(`   Asset ${assetId} marked as PROCESSED`);
 
@@ -199,7 +256,10 @@ async function startWorker(): Promise<void> {
           throw err;
         }
       },
-      { connection },
+      {
+        connection,
+        concurrency: DEFAULT_WORKER_CONCURRENCY, // ← process 3 jobs simultaneously
+      },
     );
 
     // Job completed successfully
