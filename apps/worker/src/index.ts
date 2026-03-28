@@ -19,6 +19,7 @@ import {
   DEFAULT_REDIS_URL,
   DEFAULT_MAX_ATTEMPTS,
   DEFAULT_RETRY_DELAY_MS,
+  DEFAULT_WORKER_CONCURRENCY,
 } from './constants';
 
 /**
@@ -215,7 +216,10 @@ async function startWorker(): Promise<void> {
           throw err;
         }
       },
-      { connection },
+      {
+        connection,
+        concurrency: DEFAULT_WORKER_CONCURRENCY, // ← process 3 jobs simultaneously
+      },
     );
 
     // Job completed successfully

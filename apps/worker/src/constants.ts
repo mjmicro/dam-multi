@@ -11,6 +11,7 @@ export const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 
 // Worker/queue
 export const DEFAULT_QUEUE_NAME = 'asset-tasks';
+export const DEFAULT_WORKER_CONCURRENCY = 3;
 
 // Retry logic
 export const DEFAULT_MAX_ATTEMPTS = 3;
