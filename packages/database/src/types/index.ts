@@ -84,6 +84,38 @@ export interface ProcessMediaJobPayload {
 }
 
 /**
+ * Video rendition document interface
+ */
+export interface IVideoRendition {
+  _id?: string;
+  assetId: string;
+  label: string;
+  providerPath: string;
+  width: number;
+  height: number;
+  size: number;
+  bitrate: number;
+  format: string;
+  isOriginal: boolean;
+  createdAt: Date;
+}
+
+/**
+ * Video rendition creation DTO
+ */
+export interface CreateVideoRenditionDTO {
+  assetId: string;
+  label: string;
+  providerPath: string;
+  width: number;
+  height: number;
+  size?: number;
+  bitrate: number;
+  format: string;
+  isOriginal: boolean;
+}
+
+/**
  * Asset query filters
  */
 export interface AssetQueryFilters {

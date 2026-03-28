@@ -1,15 +1,17 @@
 import {
   IAsset,
+  IVideoRenditionDocument,
   CreateAssetDTO,
   ProcessMediaJobPayload,
   AssetStatus,
   AssetQueryFilters,
 } from '@dam/database';
+import { Model } from 'mongoose';
 import { Queue } from 'bullmq';
 import * as Minio from 'minio';
 import { AssetRepository } from '../repositories/asset-repository';
 import { DEFAULT_BUCKET_NAME } from '../config/constants';
-import { getConfig } from '../config/config';
+import { createExternalSignerClient } from '../config/minio';
 
 /**
  * AssetService - Business logic layer
@@ -19,12 +21,22 @@ import { getConfig } from '../config/config';
  * - Queue job creation
  * - Business logic validation
  */
+export interface RenditionInfo {
+  label: string;
+  width: number;
+  height: number;
+  bitrate: number;
+  format: string;
+  isOriginal: boolean;
+}
+
 export class AssetService {
   constructor(
     private repository: AssetRepository,
     private minioClient: Minio.Client,
     private assetQueue: Queue,
     private minioExternalUrl: string,
+    private renditionModel: Model<IVideoRenditionDocument>,
   ) {}
 
   /**
@@ -39,10 +51,29 @@ export class AssetService {
   }
 
   /**
-   * Get asset by ID
+   * Get asset by ID, with renditions attached for video assets
    */
-  async getAssetById(id: string): Promise<IAsset | null> {
-    return this.repository.findById(id);
+  async getAssetById(id: string): Promise<(IAsset & { renditions?: RenditionInfo[] }) | null> {
+    const asset = await this.repository.findById(id);
+    if (!asset) return null;
+
+    if (asset.mimeType.startsWith('video/')) {
+      const renditionDocs = await this.renditionModel
+        .find({ assetId: id })
+        .sort({ isOriginal: -1, label: 1 })
+        .lean();
+      const renditions: RenditionInfo[] = renditionDocs.map((r) => ({
+        label: r.label,
+        width: r.width,
+        height: r.height,
+        bitrate: r.bitrate,
+        format: r.format,
+        isOriginal: r.isOriginal,
+      }));
+      return { ...asset, renditions };
+    }
+
+    return asset;
   }
 
   /**
@@ -133,13 +164,15 @@ export class AssetService {
 
   /**
    * Generate a short-lived MinIO presigned URL for preview/download.
+   * Pass renditionLabel to presign a specific transcoded version.
    */
   async getPresignedAssetUrl(
     assetId: string,
     purpose: 'preview' | 'download',
     expiryMinutes: number,
+    renditionLabel?: string,
   ): Promise<{ url: string }> {
-    const asset = await this.getAssetById(assetId);
+    const asset = await this.repository.findById(assetId);
 
     if (!asset) {
       throw new Error('Asset not found');
@@ -149,7 +182,14 @@ export class AssetService {
     const clampedMinutes = Math.max(15, Math.min(60, Math.floor(expiryMinutes)));
     const expirySeconds = clampedMinutes * 60;
 
-    const objectName = asset.providerPath || asset.filename;
+    let objectName = asset.providerPath || asset.filename;
+
+    if (renditionLabel) {
+      const rendition = await this.renditionModel
+        .findOne({ assetId, label: renditionLabel })
+        .lean();
+      if (rendition) objectName = rendition.providerPath;
+    }
     const safeOriginalName = asset.originalName.replace(/"/g, '').replace(/[\r\n]/g, '');
 
     // MinIO presigned response overrides.
@@ -160,9 +200,10 @@ export class AssetService {
     };
 
     // Use external sign client if configured to ensure signature is valid for browser URLs
-    const signerClient = this.minioExternalUrl && this.minioExternalUrl.trim()
-      ? this.createExternalSignerClient()
-      : this.minioClient;
+    const signerClient =
+      this.minioExternalUrl && this.minioExternalUrl.trim()
+        ? createExternalSignerClient(this.minioExternalUrl)
+        : this.minioClient;
 
     const signedUrl = await signerClient.presignedGetObject(
       DEFAULT_BUCKET_NAME,
@@ -172,26 +213,5 @@ export class AssetService {
     );
 
     return { url: signedUrl };
-  }
-
-  /**
-   * Create a MinIO client for external environment (for presigning).
-   * This ensures the signature is valid for URLs accessed from the browser.
-   */
-  private createExternalSignerClient(): Minio.Client {
-    const config = getConfig();
-    const externalUrl = new URL(this.minioExternalUrl);
-    const host = externalUrl.hostname || 'localhost';
-    const port = externalUrl.port ? Number(externalUrl.port) : (externalUrl.protocol === 'https:' ? 443 : 80);
-    const useSSL = externalUrl.protocol === 'https:';
-
-    return new Minio.Client({
-      endPoint: host,
-      port,
-      useSSL,
-      accessKey: config.minio.accessKey,
-      secretKey: config.minio.secretKey,
-      region: config.minio.region,
-    });
   }
 }

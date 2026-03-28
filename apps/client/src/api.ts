@@ -16,12 +16,21 @@ export interface Asset {
     bitrate?: number;
     format?: string;
     thumbnail?: string;
-    transcoded?: Array<{ resolution: string; path: string }>;
   };
   tags: string[];
+  renditions?: VideoRendition[];
   error?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface VideoRendition {
+  label: string;
+  width: number;
+  height: number;
+  bitrate: number;
+  format: string;
+  isOriginal: boolean;
 }
 
 export interface UploadResponse {
@@ -161,9 +170,12 @@ export class ApiClient {
     assetId: string,
     purpose: 'preview' | 'download',
     expiryMinutes: number = 30,
+    renditionLabel?: string,
   ): Promise<string> {
+    const params: Record<string, string | number> = { purpose, expiryMinutes };
+    if (renditionLabel) params.renditionLabel = renditionLabel;
     const response = await this.client.get<{ url: string }>(`/api/assets/${assetId}/presign`, {
-      params: { purpose, expiryMinutes },
+      params,
     });
     return response.data.url;
   }

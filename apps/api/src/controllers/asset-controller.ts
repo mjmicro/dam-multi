@@ -79,8 +79,14 @@ export const getPresignedAssetUrl = async (req: Request, res: Response) => {
 
     const expiryMinutesRaw = Number(req.query.expiryMinutes ?? 30);
     const expiryMinutes = Number.isFinite(expiryMinutesRaw) ? expiryMinutesRaw : 30;
+    const renditionLabel = req.query.renditionLabel as string | undefined;
 
-    const { url } = await assetService.getPresignedAssetUrl(id, purpose, expiryMinutes);
+    const { url } = await assetService.getPresignedAssetUrl(
+      id,
+      purpose,
+      expiryMinutes,
+      renditionLabel,
+    );
     res.json({ url });
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : 'Unknown error';

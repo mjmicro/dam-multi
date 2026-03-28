@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AssetItemProps } from './types';
 import { Tags } from './Tags';
+import { VideoRendition } from '../api';
 import {
   STATUS_COLORS,
   SIZE_UNITS,
@@ -22,6 +23,8 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [renditions, setRenditions] = useState<VideoRendition[]>([]);
+  const [selectedRenditionLabel, setSelectedRenditionLabel] = useState<string>('original');
 
   useEffect(() => {
     if (asset.status !== 'PROCESSED' || !asset._id) return;
@@ -32,6 +35,21 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
         // No thumbnail available — placeholder will show
       });
   }, [asset._id, asset.status]);
+
+  useEffect(() => {
+    if (asset.status !== 'PROCESSED' || !asset._id || !isVideo) return;
+    apiClient
+      .getAsset(asset._id)
+      .then((data) => {
+        const r = data.renditions ?? [];
+        setRenditions(r);
+        const original = r.find((v) => v.isOriginal);
+        if (original) setSelectedRenditionLabel(original.label);
+      })
+      .catch((err) => {
+        console.error('Failed to load renditions:', err);
+      });
+  }, [asset._id, asset.status, isVideo]);
 
   const getStatusColor = (status: string) => {
     return STATUS_COLORS[status.toUpperCase()] || 'bg-gray-100 text-gray-800';
@@ -51,7 +69,8 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
       setPreviewError(null);
       setPreviewUrl(null);
 
-      const url = await apiClient.getPresignedUrl(asset._id, 'preview', 30);
+      const label = isVideo && renditions.length > 0 ? selectedRenditionLabel : undefined;
+      const url = await apiClient.getPresignedUrl(asset._id, 'preview', 30, label);
       setPreviewUrl(url);
     } catch (err) {
       console.error('Failed to generate preview URL:', err);
@@ -122,9 +141,6 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
                 </p>
               )}
               {asset.metadata.duration && <p>Duration: {Math.round(asset.metadata.duration)}s</p>}
-              {asset.metadata.transcoded && asset.metadata.transcoded.length > 0 && (
-                <p>Resolutions: {asset.metadata.transcoded.map((t) => t.resolution).join(', ')}</p>
-              )}
             </div>
           )}
 
@@ -135,6 +151,20 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
           <Tags assetId={asset._id} tags={tags} onTagsChange={setTags} />
 
           <div className="flex gap-2 mt-2">
+            {isVideo && renditions.length > 0 && (
+              <select
+                value={selectedRenditionLabel}
+                onChange={(e) => setSelectedRenditionLabel(e.target.value)}
+                className="border border-gray-300 rounded px-2 py-2 text-sm text-gray-700 bg-white"
+                disabled={isDeleting}
+              >
+                {renditions.map((r) => (
+                  <option key={r.label} value={r.label}>
+                    {r.isOriginal ? 'Original' : r.label}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               type="button"
               onClick={handlePreview}
@@ -179,7 +209,9 @@ export const AssetItem: React.FC<AssetItemProps> = ({ asset, onDelete, isDeletin
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b">
-              <div className="font-semibold text-gray-900 truncate">{asset.originalName}</div>
+              <div className="font-semibold text-gray-900 truncate">
+                {asset.originalName}({selectedRenditionLabel})
+              </div>
               <button
                 type="button"
                 className="text-gray-500 hover:text-gray-800 px-2 py-1 rounded"

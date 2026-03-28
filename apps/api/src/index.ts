@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import * as Minio from 'minio';
 import { Queue } from 'bullmq';
-import { getAssetModel, getThumbnailModel, connectDb } from '@dam/database';
+import { getAssetModel, getThumbnailModel, getVideoRenditionModel, connectDb } from '@dam/database';
 import { corsMiddleware } from './middleware/cors';
 import { getConfig } from './config/config';
 import { AssetService } from './services/asset-service';
@@ -79,11 +79,13 @@ app.use('/api/upload', uploadRouter);
     const assetQueue = new Queue(config.queue.name, { connection });
 
     // Service initialization
+    const VideoRenditionModel = getVideoRenditionModel();
     const assetService = new AssetService(
       assetRepository,
       minioClient,
       assetQueue,
       config.minio.externalUrl,
+      VideoRenditionModel,
     );
     app.locals.assetService = assetService;
 
